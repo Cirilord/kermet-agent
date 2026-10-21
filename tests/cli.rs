@@ -117,3 +117,23 @@ fn run_fails_when_no_model_provider_is_configured() -> () {
 
   return;
 }
+
+#[test]
+fn run_rejects_an_empty_task() -> () {
+  let workspace = create_workspace();
+  let output = Command::new(env!("CARGO_BIN_EXE_kermet"))
+    .args(["run", "  ", "--workspace"])
+    .arg(&workspace)
+    .output()
+    .expect("the Kermet binary should execute");
+
+  fs::remove_dir_all(&workspace).expect("the temporary workspace should be removed");
+
+  assert_eq!(output.status.code(), Some(2_i32));
+
+  let stderr = String::from_utf8(output.stderr).expect("run error output should be valid UTF-8");
+
+  assert!(stderr.contains("error: task must not be empty"));
+
+  return;
+}

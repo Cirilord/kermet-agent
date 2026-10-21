@@ -1,3 +1,4 @@
+use crate::agent::PermissionMode;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
@@ -23,8 +24,8 @@ pub struct RunArgs {
   #[arg(long, default_value = ".")]
   pub workspace: PathBuf,
   /// Maximum permission mode available to the task.
-  #[arg(long, value_enum, default_value_t = PermissionMode::ReadOnly)]
-  pub mode: PermissionMode,
+  #[arg(long, value_enum, default_value_t = CliPermissionMode::ReadOnly)]
+  pub mode: CliPermissionMode,
 }
 
 #[derive(Debug, Subcommand)]
@@ -36,25 +37,25 @@ pub enum Command {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-pub enum PermissionMode {
+pub enum CliPermissionMode {
   ReadOnly,
   WorkspaceWrite,
 }
 
-impl std::fmt::Display for PermissionMode {
-  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let value = match *self {
-      Self::ReadOnly => "read-only",
-      Self::WorkspaceWrite => "workspace-write",
+impl From<CliPermissionMode> for PermissionMode {
+  fn from(mode: CliPermissionMode) -> Self {
+    let permission_mode = match mode {
+      CliPermissionMode::ReadOnly => Self::ReadOnly,
+      CliPermissionMode::WorkspaceWrite => Self::WorkspaceWrite,
     };
 
-    return formatter.write_str(value);
+    return permission_mode;
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::{Cli, Command, PermissionMode};
+  use super::{Cli, CliPermissionMode, Command};
   use clap::Parser;
 
   #[test]
@@ -76,7 +77,7 @@ mod tests {
 
     assert_eq!(arguments.task, "inspect the authentication flow");
     assert_eq!(arguments.workspace, std::path::PathBuf::from("./workspace"));
-    assert_eq!(arguments.mode, PermissionMode::WorkspaceWrite);
+    assert_eq!(arguments.mode, CliPermissionMode::WorkspaceWrite);
 
     return;
   }

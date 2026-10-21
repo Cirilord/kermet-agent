@@ -12,6 +12,10 @@ The CLI parses user input and validates the workspace before constructing a type
 
 The initial commands are `doctor` and `run`. `doctor` reports deterministic local state. Until a model provider exists, `run` validates its inputs and fails with a configuration error.
 
+## Task request
+
+`TaskRequest` is the typed boundary between the CLI and agent core. It contains a non-empty task, a validated workspace, and the requested permission mode. It carries domain data only: Clap types, provider configuration, and tool execution stay outside it.
+
 ## Core components
 
 | Component | Responsibility |

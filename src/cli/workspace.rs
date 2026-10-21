@@ -1,49 +1,31 @@
+use crate::workspace::Workspace;
 use std::fmt::{Display, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-#[derive(Debug)]
-pub struct Workspace {
-  path: PathBuf,
-  has_git_metadata: bool,
-}
-
-impl Workspace {
-  pub fn open(path: PathBuf) -> Result<Self, WorkspaceError> {
-    let metadata = match std::fs::metadata(&path) {
-      Ok(metadata) => metadata,
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-        return Err(WorkspaceError::NotFound(path));
-      }
-      Err(source) => {
-        return Err(WorkspaceError::Metadata { path, source });
-      }
-    };
-
-    if !metadata.is_dir() {
-      return Err(WorkspaceError::NotDirectory(path));
+pub fn open_workspace(path: PathBuf) -> Result<Workspace, WorkspaceError> {
+  let metadata = match std::fs::metadata(&path) {
+    Ok(metadata) => metadata,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+      return Err(WorkspaceError::NotFound(path));
     }
+    Err(source) => {
+      return Err(WorkspaceError::Metadata { path, source });
+    }
+  };
 
-    let canonical_path = match std::fs::canonicalize(&path) {
-      Ok(canonical_path) => canonical_path,
-      Err(source) => {
-        return Err(WorkspaceError::Canonicalize { path, source });
-      }
-    };
-    let has_git_metadata = canonical_path.join(".git").exists();
-
-    return Ok(Self {
-      path: canonical_path,
-      has_git_metadata,
-    });
+  if !metadata.is_dir() {
+    return Err(WorkspaceError::NotDirectory(path));
   }
 
-  pub fn path(&self) -> &Path {
-    return &self.path;
-  }
+  let canonical_path = match std::fs::canonicalize(&path) {
+    Ok(canonical_path) => canonical_path,
+    Err(source) => {
+      return Err(WorkspaceError::Canonicalize { path, source });
+    }
+  };
+  let has_git_metadata = canonical_path.join(".git").exists();
 
-  pub fn has_git_metadata(&self) -> bool {
-    return self.has_git_metadata;
-  }
+  return Ok(Workspace::new(canonical_path, has_git_metadata));
 }
 
 #[derive(Debug)]
@@ -62,38 +44,32 @@ pub enum WorkspaceError {
 
 impl Display for WorkspaceError {
   fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-    match *self {
-      Self::NotFound(ref path) => {
-        return write!(formatter, "workspace does not exist: {}", path.display());
-      }
-      Self::NotDirectory(ref path) => {
-        return write!(
-          formatter,
-          "workspace is not a directory: {}",
-          path.display()
-        );
-      }
+    let result = match *self {
+      Self::NotFound(ref path) => write!(formatter, "workspace does not exist: {}", path.display()),
+      Self::NotDirectory(ref path) => write!(
+        formatter,
+        "workspace is not a directory: {}",
+        path.display()
+      ),
       Self::Metadata {
         ref path,
         ref source,
-      } => {
-        return write!(
-          formatter,
-          "failed to read workspace metadata for {}: {source}",
-          path.display()
-        );
-      }
+      } => write!(
+        formatter,
+        "failed to read workspace metadata for {}: {source}",
+        path.display()
+      ),
       Self::Canonicalize {
         ref path,
         ref source,
-      } => {
-        return write!(
-          formatter,
-          "failed to canonicalize workspace {}: {source}",
-          path.display()
-        );
-      }
-    }
+      } => write!(
+        formatter,
+        "failed to canonicalize workspace {}: {source}",
+        path.display()
+      ),
+    };
+
+    return result;
   }
 }
 
@@ -101,14 +77,14 @@ impl std::error::Error for WorkspaceError {}
 
 #[cfg(test)]
 mod tests {
-  use super::{Workspace, WorkspaceError};
+  use super::{WorkspaceError, open_workspace};
   use std::time::{SystemTime, UNIX_EPOCH};
 
   #[test]
   fn rejects_a_missing_workspace() -> () {
     let path = unique_path("missing");
 
-    let result = Workspace::open(path);
+    let result = open_workspace(path);
 
     assert!(matches!(result, Err(WorkspaceError::NotFound(_))));
 
@@ -120,7 +96,7 @@ mod tests {
     let path = unique_path("file");
     std::fs::write(&path, "fixture").expect("the fixture should be written");
 
-    let result = Workspace::open(path.clone());
+    let result = open_workspace(path.clone());
 
     std::fs::remove_file(path).expect("the fixture should be removed");
     assert!(matches!(result, Err(WorkspaceError::NotDirectory(_))));

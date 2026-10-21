@@ -3,10 +3,11 @@ mod workspace;
 
 pub use args::Cli;
 
+use crate::agent::{TaskRequest, TaskRequestError};
 use args::{Command, DoctorArgs, RunArgs};
 use clap::CommandFactory;
 use std::process::ExitCode;
-use workspace::{Workspace, WorkspaceError};
+use workspace::{WorkspaceError, open_workspace};
 
 const INVALID_INPUT_EXIT_CODE: u8 = 2;
 const CONFIGURATION_EXIT_CODE: u8 = 78;
@@ -17,8 +18,14 @@ fn report_workspace_error(error: &WorkspaceError) -> () {
   return;
 }
 
+fn report_task_request_error(error: &TaskRequestError) -> () {
+  eprintln!("error: {error}");
+
+  return;
+}
+
 fn doctor(arguments: DoctorArgs) -> ExitCode {
-  let workspace = match Workspace::open(arguments.workspace) {
+  let workspace = match open_workspace(arguments.workspace) {
     Ok(workspace) => workspace,
     Err(error) => {
       report_workspace_error(&error);
@@ -41,18 +48,25 @@ fn doctor(arguments: DoctorArgs) -> ExitCode {
 }
 
 fn run_task(arguments: RunArgs) -> ExitCode {
-  let workspace = match Workspace::open(arguments.workspace) {
+  let workspace = match open_workspace(arguments.workspace) {
     Ok(workspace) => workspace,
     Err(error) => {
       report_workspace_error(&error);
       return ExitCode::from(INVALID_INPUT_EXIT_CODE);
     }
   };
+  let request = match TaskRequest::new(arguments.task, workspace, arguments.mode.into()) {
+    Ok(request) => request,
+    Err(error) => {
+      report_task_request_error(&error);
+      return ExitCode::from(INVALID_INPUT_EXIT_CODE);
+    }
+  };
 
   eprintln!("error: no model provider is configured");
-  eprintln!("task: {}", arguments.task);
-  eprintln!("workspace: {}", workspace.path().display());
-  eprintln!("permission mode: {}", arguments.mode);
+  eprintln!("task: {}", request.task());
+  eprintln!("workspace: {}", request.workspace().path().display());
+  eprintln!("permission mode: {}", request.permission_mode());
 
   return ExitCode::from(CONFIGURATION_EXIT_CODE);
 }
