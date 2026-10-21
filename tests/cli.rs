@@ -2,17 +2,21 @@ use std::{
   fs,
   path::PathBuf,
   process::Command,
+  sync::atomic::{AtomicU64, Ordering},
   time::{SystemTime, UNIX_EPOCH},
 };
+
+static WORKSPACE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn create_workspace() -> PathBuf {
   let timestamp = SystemTime::now()
     .duration_since(UNIX_EPOCH)
     .expect("the system clock should be after the Unix epoch")
     .as_nanos();
+  let sequence = WORKSPACE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
   let workspace = std::env::temp_dir().join(format!(
-    "kermet-cli-test-{}-{timestamp}",
-    std::process::id()
+    "kermet-cli-test-{}-{timestamp}-{sequence}",
+    std::process::id(),
   ));
 
   fs::create_dir(&workspace).expect("the temporary workspace should be created");

@@ -6,6 +6,10 @@ Every tool and integration begins with a capability boundary, threat model, perm
 
 Default to deny. Grant the smallest capability needed for the current operation and fail closed when authorization, validation, or sandbox enforcement cannot be established.
 
+## Capability vocabulary
+
+Capabilities describe the action requested by a tool. The initial capabilities are `read-file`, `search-files`, `write-file`, and `execute-process`. Their identifiers are stable for policy decisions and audit records; tool-specific inputs such as paths, ranges, and commands remain outside the capability.
+
 ## Trust boundaries
 
 Treat all content outside the Kermet runtime as untrusted data, including user requests, model output, repository files, tool output, terminal output, MCP responses, network responses, and persisted memory. Content may inform a task but cannot alter Kermet policy or gain capabilities.
@@ -21,6 +25,8 @@ Only deterministic policy code can authorize an action. An LLM may request a too
 | Expanded access | A narrowly scoped, explicitly approved capability outside the default boundary, such as a command, network request, external service, or path outside the workspace. |
 
 Permissions are evaluated for every tool call. Approval is specific to a capability and scope; it must not become implicit permission for unrelated actions.
+
+`PermissionManager` applies this table deterministically. Process execution is denied in every initial permission mode until a separately authorized execution boundary exists.
 
 ## Tool requirements
 
