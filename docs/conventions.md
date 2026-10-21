@@ -7,6 +7,7 @@
 - Make dependencies explicit through function arguments and constructors.
 - Avoid global mutable state.
 - Introduce an abstraction only when it has at least two concrete use cases.
+- Functions may call items declared later in the same module; order items for readability, not compilation dependencies.
 
 ## Rust
 
