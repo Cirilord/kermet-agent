@@ -41,6 +41,23 @@ fn binary_prints_help() -> () {
 }
 
 #[test]
+fn binary_prints_help_without_a_command() -> () {
+  let output = Command::new(env!("CARGO_BIN_EXE_kermet"))
+    .output()
+    .expect("the Kermet binary should execute");
+
+  assert!(output.status.success());
+
+  let stdout = String::from_utf8(output.stdout).expect("help output should be valid UTF-8");
+
+  assert!(stdout.contains("A local coding agent"));
+  assert!(stdout.contains("doctor"));
+  assert!(stdout.contains("run"));
+
+  return;
+}
+
+#[test]
 fn binary_reports_its_version() -> () {
   let output = Command::new(env!("CARGO_BIN_EXE_kermet"))
     .arg("--version")
