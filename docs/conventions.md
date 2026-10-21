@@ -12,6 +12,8 @@
 
 - Use stable Rust.
 - Keep `cargo fmt --check` and `cargo clippy -- -D warnings` clean.
+- Declare an explicit return type on every function, including `-> ()`.
+- End every function with an explicit `return`; do not use implicit tail-expression returns.
 - Prefer domain types and enums over primitive strings and booleans.
 - Use `Result` for expected failures and typed error enums at module boundaries.
 - Do not use `unwrap()` or `expect()` in production paths.

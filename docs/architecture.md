@@ -6,6 +6,12 @@
 - **Distribution:** a native executable for each supported platform.
 - **Design:** the agent core must remain independent from the CLI, model providers, filesystem, shell, and external integrations.
 
+## CLI boundary
+
+The CLI parses user input and validates the workspace before constructing a typed request for the runtime. It does not contain agent behavior, provider logic, permission decisions, or tool execution.
+
+The initial commands are `doctor` and `run`. `doctor` reports deterministic local state. Until a model provider exists, `run` validates its inputs and fails with a configuration error.
+
 ## Core components
 
 | Component | Responsibility |
