@@ -124,6 +124,8 @@ impl ReadFile {
       });
     }
 
+    let contents = select_lines(contents, request.line_range);
+
     return Ok(ReadFileOutput { path, contents });
   }
 }
@@ -131,12 +133,75 @@ impl ReadFile {
 #[derive(Debug)]
 pub struct ReadFileRequest {
   path: PathBuf,
+  line_range: Option<LineRange>,
 }
 
 impl ReadFileRequest {
   pub fn new(path: PathBuf) -> Self {
-    return Self { path };
+    return Self {
+      path,
+      line_range: None,
+    };
   }
+
+  pub fn with_line_range(
+    path: PathBuf,
+    start: usize,
+    end: usize,
+  ) -> Result<Self, ReadFileRequestError> {
+    let line_range = match LineRange::new(start, end) {
+      Ok(line_range) => line_range,
+      Err(error) => return Err(error),
+    };
+
+    return Ok(Self {
+      path,
+      line_range: Some(line_range),
+    });
+  }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct LineRange {
+  start: usize,
+  end: usize,
+}
+
+impl LineRange {
+  fn new(start: usize, end: usize) -> Result<Self, ReadFileRequestError> {
+    if start == 0 || end < start {
+      return Err(ReadFileRequestError::InvalidLineRange { start, end });
+    }
+
+    return Ok(Self { start, end });
+  }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ReadFileRequestError {
+  InvalidLineRange { start: usize, end: usize },
+}
+
+fn select_lines(contents: Vec<u8>, line_range: Option<LineRange>) -> Vec<u8> {
+  let Some(line_range) = line_range else {
+    return contents;
+  };
+  let mut selected_contents = Vec::new();
+
+  for (index, line) in contents
+    .split_inclusive(|byte| {
+      return *byte == b'\n';
+    })
+    .enumerate()
+  {
+    let line_number = index + 1;
+
+    if line_number >= line_range.start && line_number <= line_range.end {
+      selected_contents.extend_from_slice(line);
+    }
+  }
+
+  return selected_contents;
 }
 
 #[derive(Debug)]
@@ -209,6 +274,78 @@ mod tests {
     let error = tool
       .execute(&task, ReadFileRequest::new(PathBuf::from("../outside.txt")))
       .expect_err("the path should be rejected");
+
+    fs::remove_dir_all(&root).expect("the fixture should be removed");
+    assert!(matches!(error, ReadFileError::OutsideWorkspace { .. }));
+
+    return;
+  }
+
+  #[test]
+  fn reads_only_the_requested_lines() -> () {
+    let workspace_path = unique_path("lines");
+    fs::create_dir(&workspace_path).expect("the workspace should be created");
+    fs::write(workspace_path.join("notes.txt"), "one\ntwo\nthree\n")
+      .expect("the file should be written");
+    let workspace = Workspace::new(
+      fs::canonicalize(&workspace_path).expect("the path should be canonical"),
+      false,
+    );
+    let task = TaskRequest::new("read notes".to_owned(), workspace, PermissionMode::ReadOnly)
+      .expect("the task should be valid");
+    let request = ReadFileRequest::with_line_range(PathBuf::from("notes.txt"), 2, 3)
+      .expect("the range should be valid");
+    let output = ReadFile::new(PermissionManager::new())
+      .execute(&task, request)
+      .expect("the file should be read");
+
+    fs::remove_dir_all(&workspace_path).expect("the workspace should be removed");
+    assert_eq!(output.contents(), b"two\nthree\n");
+
+    return;
+  }
+
+  #[test]
+  fn rejects_a_missing_file() -> () {
+    let workspace_path = unique_path("missing");
+    fs::create_dir(&workspace_path).expect("the workspace should be created");
+    let workspace = Workspace::new(
+      fs::canonicalize(&workspace_path).expect("the path should be canonical"),
+      false,
+    );
+    let task = TaskRequest::new("read file".to_owned(), workspace, PermissionMode::ReadOnly)
+      .expect("the task should be valid");
+    let error = ReadFile::new(PermissionManager::new())
+      .execute(&task, ReadFileRequest::new(PathBuf::from("missing.txt")))
+      .expect_err("the file should be missing");
+
+    fs::remove_dir_all(&workspace_path).expect("the workspace should be removed");
+    assert!(matches!(error, ReadFileError::Canonicalize { .. }));
+
+    return;
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn rejects_a_symlink_that_escapes_the_workspace() -> () {
+    use std::os::unix::fs::symlink;
+
+    let root = unique_path("symlink");
+    let workspace_path = root.join("workspace");
+    let outside_path = root.join("outside.txt");
+    fs::create_dir_all(&workspace_path).expect("the workspace should be created");
+    fs::write(&outside_path, "outside").expect("the file should be written");
+    symlink(&outside_path, workspace_path.join("escape.txt"))
+      .expect("the symlink should be created");
+    let workspace = Workspace::new(
+      fs::canonicalize(&workspace_path).expect("the path should be canonical"),
+      false,
+    );
+    let task = TaskRequest::new("read file".to_owned(), workspace, PermissionMode::ReadOnly)
+      .expect("the task should be valid");
+    let error = ReadFile::new(PermissionManager::new())
+      .execute(&task, ReadFileRequest::new(PathBuf::from("escape.txt")))
+      .expect_err("the symlink should be rejected");
 
     fs::remove_dir_all(&root).expect("the fixture should be removed");
     assert!(matches!(error, ReadFileError::OutsideWorkspace { .. }));

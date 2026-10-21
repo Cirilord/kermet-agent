@@ -1,3 +1,5 @@
 mod read_file;
 
-pub use read_file::{ReadFile, ReadFileError, ReadFileOutput, ReadFileRequest};
+pub use read_file::{
+  ReadFile, ReadFileError, ReadFileOutput, ReadFileRequest, ReadFileRequestError,
+};
