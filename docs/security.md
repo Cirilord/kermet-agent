@@ -57,6 +57,8 @@ Codex authentication may contact only `https://auth.openai.com` to exchange or r
 
 Persist provider credentials only through the operating system credential store. Kermet uses a stable service name and a provider/profile account name, and it does not fall back to a plaintext file when the credential store is unavailable. The only alternative is an explicit ephemeral store that retains credentials in process memory. Deleting credentials must be idempotent.
 
+User configuration files may contain provider names, model identifiers, and reasoning settings, but never credentials or token material.
+
 ## Auditing and failure behavior
 
 Emit structured events for permission decisions, tool requests, execution boundaries, denials, timeouts, redactions, and failures. Audit records must not contain secrets or unrestricted file contents.

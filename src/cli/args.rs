@@ -1,4 +1,4 @@
-use crate::agent::PermissionMode;
+use crate::{agent::PermissionMode, models::ReasoningEffort};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
@@ -26,6 +26,18 @@ pub struct RunArgs {
   /// Maximum permission mode available to the task.
   #[arg(long, value_enum, default_value_t = CliPermissionMode::ReadOnly)]
   pub mode: CliPermissionMode,
+  /// Configuration profile that selects the provider and model.
+  #[arg(long, default_value = "default")]
+  pub profile: String,
+  /// Override the configured provider for this task.
+  #[arg(long)]
+  pub provider: Option<String>,
+  /// Override the configured model for this task.
+  #[arg(long)]
+  pub model: Option<String>,
+  /// Override the configured reasoning effort for this task.
+  #[arg(long, value_enum)]
+  pub reasoning_effort: Option<CliReasoningEffort>,
 }
 
 #[derive(Args, Debug)]
@@ -50,6 +62,53 @@ pub struct LogoutArgs {
   pub profile: String,
 }
 
+#[derive(Args, Debug)]
+pub struct ConfigArgs {
+  #[command(subcommand)]
+  pub command: ConfigCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ConfigCommand {
+  /// Create an empty user configuration file.
+  Init,
+  /// Print a configured value.
+  Get(ConfigGetArgs),
+  /// Set a configured value.
+  Set(ConfigSetArgs),
+  /// Remove a configured value.
+  Unset(ConfigUnsetArgs),
+  /// Validate a model profile.
+  Check(ConfigCheckArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct ConfigGetArgs {
+  /// A profile key such as profiles.default.model.
+  pub key: String,
+}
+
+#[derive(Args, Debug)]
+pub struct ConfigSetArgs {
+  /// A profile key such as profiles.default.model.
+  pub key: String,
+  /// Value to save for the selected key.
+  pub value: String,
+}
+
+#[derive(Args, Debug)]
+pub struct ConfigUnsetArgs {
+  /// A profile key such as profiles.default.model.
+  pub key: String,
+}
+
+#[derive(Args, Debug)]
+pub struct ConfigCheckArgs {
+  /// Profile to validate.
+  #[arg(long, default_value = "default")]
+  pub profile: String,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
   /// Inspect the current workspace and local prerequisites.
@@ -60,12 +119,42 @@ pub enum Command {
   Login(LoginArgs),
   /// Remove saved Codex credentials.
   Logout(LogoutArgs),
+  /// Manage non-secret user configuration.
+  Config(ConfigArgs),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum CliPermissionMode {
   ReadOnly,
   WorkspaceWrite,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum CliReasoningEffort {
+  None,
+  Minimal,
+  Low,
+  Medium,
+  High,
+  #[value(name = "xhigh")]
+  XHigh,
+  Max,
+}
+
+impl From<CliReasoningEffort> for ReasoningEffort {
+  fn from(reasoning_effort: CliReasoningEffort) -> Self {
+    let value = match reasoning_effort {
+      CliReasoningEffort::None => Self::None,
+      CliReasoningEffort::Minimal => Self::Minimal,
+      CliReasoningEffort::Low => Self::Low,
+      CliReasoningEffort::Medium => Self::Medium,
+      CliReasoningEffort::High => Self::High,
+      CliReasoningEffort::XHigh => Self::XHigh,
+      CliReasoningEffort::Max => Self::Max,
+    };
+
+    return value;
+  }
 }
 
 impl From<CliPermissionMode> for PermissionMode {
@@ -81,7 +170,7 @@ impl From<CliPermissionMode> for PermissionMode {
 
 #[cfg(test)]
 mod tests {
-  use super::{Cli, CliPermissionMode, Command, LoginCommand};
+  use super::{Cli, CliPermissionMode, Command, ConfigCommand, LoginCommand};
   use clap::Parser;
 
   #[test]
@@ -118,6 +207,29 @@ mod tests {
 
     assert!(matches!(arguments.command, Some(LoginCommand::Status)));
     assert_eq!(arguments.profile, "work");
+
+    return;
+  }
+
+  #[test]
+  fn parses_config_set() -> () {
+    let cli = Cli::try_parse_from([
+      "kermet",
+      "config",
+      "set",
+      "profiles.default.model",
+      "gpt-6.1-sol",
+    ])
+    .expect("the command-line arguments should parse");
+    let Command::Config(arguments) = cli.command.expect("a subcommand should be present") else {
+      panic!("the config subcommand should parse");
+    };
+    let ConfigCommand::Set(arguments) = arguments.command else {
+      panic!("the config set subcommand should parse");
+    };
+
+    assert_eq!(arguments.key, "profiles.default.model");
+    assert_eq!(arguments.value, "gpt-6.1-sol");
 
     return;
   }

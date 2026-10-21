@@ -13,6 +13,7 @@ Read the relevant documentation in `docs/` before making a change. Keep this fil
 | Development, testing, and validation workflow | `docs/development.md` |
 | Security, permissions, and tool-execution rules | `docs/security.md` |
 | Product decisions and roadmap | `docs/product.md` |
+| User configuration and model profiles | `docs/configuration.md` |
 
 ## Working rules
 

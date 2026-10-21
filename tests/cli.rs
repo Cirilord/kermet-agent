@@ -42,6 +42,7 @@ fn binary_prints_help() -> () {
   assert!(stdout.contains("run"));
   assert!(stdout.contains("login"));
   assert!(stdout.contains("logout"));
+  assert!(stdout.contains("config"));
 
   return;
 }
@@ -61,6 +62,7 @@ fn binary_prints_help_without_a_command() -> () {
   assert!(stdout.contains("run"));
   assert!(stdout.contains("login"));
   assert!(stdout.contains("logout"));
+  assert!(stdout.contains("config"));
 
   return;
 }
@@ -109,6 +111,14 @@ fn run_fails_when_no_model_provider_is_configured() -> () {
   let output = Command::new(env!("CARGO_BIN_EXE_kermet"))
     .args(["run", "inspect the project", "--workspace"])
     .arg(&workspace)
+    .args([
+      "--provider",
+      "codex",
+      "--model",
+      "gpt-6.1-sol",
+      "--reasoning-effort",
+      "medium",
+    ])
     .output()
     .expect("the Kermet binary should execute");
 
@@ -122,6 +132,9 @@ fn run_fails_when_no_model_provider_is_configured() -> () {
   assert!(stderr.contains("task: inspect the project"));
   assert!(stderr.contains(&format!("workspace: {}", workspace.display())));
   assert!(stderr.contains("permission mode: read-only"));
+  assert!(stderr.contains("provider: codex"));
+  assert!(stderr.contains("model: gpt-6.1-sol"));
+  assert!(stderr.contains("reasoning effort: medium"));
 
   return;
 }
@@ -132,6 +145,14 @@ fn run_rejects_an_empty_task() -> () {
   let output = Command::new(env!("CARGO_BIN_EXE_kermet"))
     .args(["run", "  ", "--workspace"])
     .arg(&workspace)
+    .args([
+      "--provider",
+      "codex",
+      "--model",
+      "gpt-6.1-sol",
+      "--reasoning-effort",
+      "medium",
+    ])
     .output()
     .expect("the Kermet binary should execute");
 

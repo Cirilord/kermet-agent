@@ -4,13 +4,18 @@ mod workspace;
 pub use args::Cli;
 
 use crate::agent::{TaskRequest, TaskRequestError};
+use crate::config::{
+  ConfigError, ModelOverrides, get, initialize, resolve_model_selection, set, unset, user_path,
+};
 use crate::providers::codex::auth::{
   AuthorizationRequest, CodexCredentialStore, TokenClient, UreqTokenTransport,
   receive_authorization_code,
 };
 use crate::security::KeyringCredentialStore;
 use crate::utils::CallbackServer;
-use args::{Command, DoctorArgs, LoginArgs, LoginCommand, LogoutArgs, RunArgs};
+use args::{
+  Command, ConfigArgs, ConfigCommand, DoctorArgs, LoginArgs, LoginCommand, LogoutArgs, RunArgs,
+};
 use clap::CommandFactory;
 use std::process::ExitCode;
 use workspace::{WorkspaceError, open_workspace};
@@ -29,6 +34,91 @@ fn report_task_request_error(error: &TaskRequestError) -> () {
   eprintln!("error: {error}");
 
   return;
+}
+
+fn report_configuration_error(error: &ConfigError) -> () {
+  let message = match *error {
+    ConfigError::HomeUnavailable => "the user home directory is unavailable",
+    ConfigError::AlreadyExists => "the Kermet configuration already exists",
+    ConfigError::Unreadable => "the Kermet configuration cannot be read",
+    ConfigError::Unwritable => "the Kermet configuration cannot be written",
+    ConfigError::InvalidDocument => "the Kermet configuration is invalid",
+    ConfigError::InvalidKey => "the configuration key is not supported",
+    ConfigError::InvalidValue => "the configuration value is invalid",
+    ConfigError::MissingProvider => "no provider is configured",
+    ConfigError::MissingModel => "no model is configured",
+    ConfigError::MissingReasoningEffort => "no reasoning effort is configured",
+    ConfigError::InvalidSelection(_) => "the model selection is invalid",
+  };
+
+  eprintln!("error: {message}");
+
+  return;
+}
+
+fn config(arguments: ConfigArgs) -> ExitCode {
+  let path = match user_path() {
+    Ok(path) => path,
+    Err(error) => {
+      report_configuration_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+
+  match arguments.command {
+    ConfigCommand::Init => match initialize(&path) {
+      Ok(()) => println!("Created configuration: {}", path.display()),
+      Err(error) => {
+        report_configuration_error(&error);
+        return ExitCode::from(CONFIGURATION_EXIT_CODE);
+      }
+    },
+    ConfigCommand::Get(arguments) => match get(&path, &arguments.key) {
+      Ok(Some(value)) => println!("{value}"),
+      Ok(None) => {
+        eprintln!("error: the configuration key is not set");
+        return ExitCode::from(CONFIGURATION_EXIT_CODE);
+      }
+      Err(error) => {
+        report_configuration_error(&error);
+        return ExitCode::from(CONFIGURATION_EXIT_CODE);
+      }
+    },
+    ConfigCommand::Set(arguments) => match set(&path, &arguments.key, arguments.value) {
+      Ok(()) => println!("Updated {}", arguments.key),
+      Err(error) => {
+        report_configuration_error(&error);
+        return ExitCode::from(CONFIGURATION_EXIT_CODE);
+      }
+    },
+    ConfigCommand::Unset(arguments) => match unset(&path, &arguments.key) {
+      Ok(true) => println!("Removed {}", arguments.key),
+      Ok(false) => println!("{} is not set", arguments.key),
+      Err(error) => {
+        report_configuration_error(&error);
+        return ExitCode::from(CONFIGURATION_EXIT_CODE);
+      }
+    },
+    ConfigCommand::Check(arguments) => {
+      match resolve_model_selection(&path, &arguments.profile, ModelOverrides::none()) {
+        Ok(selection) => {
+          println!("Profile: {}", arguments.profile);
+          println!("Provider: {}", selection.provider());
+          println!("Model: {}", selection.model());
+          println!(
+            "Reasoning effort: {}",
+            selection.reasoning_effort().identifier()
+          );
+        }
+        Err(error) => {
+          report_configuration_error(&error);
+          return ExitCode::from(CONFIGURATION_EXIT_CODE);
+        }
+      }
+    }
+  }
+
+  return ExitCode::SUCCESS;
 }
 
 fn doctor(arguments: DoctorArgs) -> ExitCode {
@@ -55,6 +145,25 @@ fn doctor(arguments: DoctorArgs) -> ExitCode {
 }
 
 fn run_task(arguments: RunArgs) -> ExitCode {
+  let config_path = match user_path() {
+    Ok(config_path) => config_path,
+    Err(error) => {
+      report_configuration_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+  let overrides = ModelOverrides {
+    provider: arguments.provider,
+    model: arguments.model,
+    reasoning_effort: arguments.reasoning_effort.map(Into::into),
+  };
+  let model_selection = match resolve_model_selection(&config_path, &arguments.profile, overrides) {
+    Ok(model_selection) => model_selection,
+    Err(error) => {
+      report_configuration_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
   let workspace = match open_workspace(arguments.workspace) {
     Ok(workspace) => workspace,
     Err(error) => {
@@ -74,6 +183,12 @@ fn run_task(arguments: RunArgs) -> ExitCode {
   eprintln!("task: {}", request.task());
   eprintln!("workspace: {}", request.workspace().path().display());
   eprintln!("permission mode: {}", request.permission_mode());
+  eprintln!("provider: {}", model_selection.provider());
+  eprintln!("model: {}", model_selection.model());
+  eprintln!(
+    "reasoning effort: {}",
+    model_selection.reasoning_effort().identifier()
+  );
 
   return ExitCode::from(CONFIGURATION_EXIT_CODE);
 }
@@ -197,6 +312,7 @@ pub fn execute(cli: Cli) -> ExitCode {
     Some(Command::Run(arguments)) => run_task(arguments),
     Some(Command::Login(arguments)) => login(arguments),
     Some(Command::Logout(arguments)) => logout(arguments),
+    Some(Command::Config(arguments)) => config(arguments),
     None => print_help(),
   };
 

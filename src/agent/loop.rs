@@ -1,6 +1,6 @@
 use crate::{
   agent::TaskRequest,
-  models::{ModelProvider, ModelProviderError, ModelRequest, ModelResponse},
+  models::{ModelProvider, ModelProviderError, ModelRequest, ModelResponse, ModelSelection},
   tools::{ToolExecutionError, ToolRegistry},
 };
 
@@ -16,8 +16,12 @@ impl<P: ModelProvider> AgentLoop<P> {
     return Self { provider, tools };
   }
 
-  pub fn execute(&self, task: &TaskRequest) -> Result<AgentResult, AgentLoopError> {
-    let mut request = ModelRequest::initial(task);
+  pub fn execute(
+    &self,
+    task: &TaskRequest,
+    model_selection: &ModelSelection,
+  ) -> Result<AgentResult, AgentLoopError> {
+    let mut request = ModelRequest::initial(task, model_selection.clone());
 
     for _ in 0..MAX_TURNS {
       let response = match self.provider.respond(request) {
@@ -32,7 +36,7 @@ impl<P: ModelProvider> AgentLoop<P> {
             Ok(tool_output) => tool_output,
             Err(error) => return Err(AgentLoopError::Tool(error)),
           };
-          request = ModelRequest::with_tool_output(task, tool_output);
+          request = ModelRequest::with_tool_output(task, model_selection.clone(), tool_output);
         }
       }
     }

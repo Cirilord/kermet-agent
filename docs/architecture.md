@@ -10,7 +10,7 @@
 
 The CLI parses user input and validates the workspace before constructing a typed request for the runtime. It does not contain agent behavior, provider logic, permission decisions, or tool execution.
 
-The initial commands are `doctor`, `run`, `login`, and `logout`. `doctor` reports deterministic local state. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. Until a model provider exists, `run` validates its inputs and fails with a configuration error.
+The initial commands are `doctor`, `run`, `login`, `logout`, and `config`. `doctor` reports deterministic local state. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. `config` manages non-secret model profiles. `run` resolves a typed provider, model, and reasoning-effort selection before constructing the runtime request; it fails when any selection value is missing.
 
 ## Task request
 

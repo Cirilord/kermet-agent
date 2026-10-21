@@ -67,6 +67,8 @@ Before adding one:
 
 `keyring` stores persistent provider credentials in the operating system credential store. Tests must use the ephemeral credential store rather than a real user keyring.
 
+`toml` parses the versioned, non-secret user configuration used to resolve model profiles.
+
 ## Persisted state
 
 - Version every persisted schema.
