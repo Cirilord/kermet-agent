@@ -1,0 +1,19 @@
+# Common formatting options, with a custom two-space indentation.
+# Unlisted options keep rustfmt's defaults; Cargo supplies the Rust edition.
+
+# Line width and indentation.
+max_width = 100
+hard_tabs = false
+tab_spaces = 2
+newline_style = "Auto"
+
+# Use the default heuristics when deciding when to wrap expressions.
+use_small_heuristics = "Default"
+
+# Keep imports and module declarations sorted.
+reorder_imports = true
+reorder_modules = true
+
+# Preserve explicit field initialization and try! syntax when present.
+use_field_init_shorthand = false
+use_try_shorthand = false

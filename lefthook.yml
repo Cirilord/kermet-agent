@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://lefthook.dev/schema.json
+
+commit-msg:
+  commands:
+    conventional-commit:
+      run: cog verify --file {1}
+
+pre-commit:
+  commands:
+    format:
+      run: cargo fmt --check
+    lint:
+      run: cargo clippy -- -D warnings
+    test:
+      run: cargo test

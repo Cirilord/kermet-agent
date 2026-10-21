@@ -1,0 +1,12 @@
+# Explicit defaults for selected lint parameters.
+# Unlisted options keep Clippy's defaults.
+# Reference: https://doc.rust-lang.org/stable/clippy/lint_configuration.html
+# This file configures lint behavior; it does not enable or disable lints.
+# Lint levels and explicitness rules are configured in Cargo.toml.
+
+# Maximum number of arguments before too_many_arguments reports a function.
+too-many-arguments-threshold = 7
+
+# Maximum type complexity score before type_complexity reports a type.
+# This is a weighted score, not a character or line count.
+type-complexity-threshold = 250

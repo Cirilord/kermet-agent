@@ -1,0 +1,50 @@
+[package]
+name = "kermet"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[lints.rust]
+# Show lifetime parameters in type paths and unsafe operations in unsafe functions.
+elided_lifetimes_in_paths = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+# Require explicit returns and error propagation instead of the ? operator.
+implicit_return = "deny"
+question_mark_used = "deny"
+question_mark = "allow"
+needless_return = "allow"
+
+# Keep explicit annotations. These allowances do not require annotations.
+unused_unit = "allow"
+redundant_type_annotations = "allow"
+needless_lifetimes = "allow"
+elidable_lifetime_names = "allow"
+redundant_field_names = "allow"
+
+# Reject selected forms of type inference and hidden generic parameters.
+default_numeric_fallback = "deny"
+as_underscore = "deny"
+let_with_type_underscore = "deny"
+let_underscore_untyped = "deny"
+default_trait_access = "deny"
+impl_trait_in_params = "deny"
+
+# Prefer From/TryFrom over numeric casts that hide conversion behavior.
+cast_lossless = "deny"
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+cast_precision_loss = "deny"
+
+# Name imports and expose reference and unit patterns.
+wildcard_imports = "deny"
+enum_glob_use = "deny"
+pattern_type_mismatch = "deny"
+ignored_unit_patterns = "deny"
+
+# Preserve explicit iterator calls when writing loops.
+explicit_iter_loop = "allow"
+explicit_into_iter_loop = "allow"
