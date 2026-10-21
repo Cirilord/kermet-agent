@@ -46,4 +46,6 @@ pub enum ModelResponse {
 #[derive(Debug)]
 pub enum ModelProviderError {
   Exhausted,
+  MissingCredentials,
+  NotImplemented,
 }

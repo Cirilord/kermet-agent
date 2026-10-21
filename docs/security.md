@@ -51,6 +51,12 @@ MCP servers, model providers, and future external integrations require a declare
 
 External integrations are disabled by default until configured and explicitly authorized.
 
+### Codex OAuth
+
+Codex authentication may contact only `https://auth.openai.com` to exchange or refresh a token. The authorization callback is accepted only from the loopback listener, and the authorization code is accepted only when its `state` matches the request that created it. The flow uses PKCE with `S256`, limits token responses to 16 KiB, and applies a finite request timeout. Access and refresh tokens must never be logged, included in errors, or added to model context.
+
+Persist provider credentials only through the operating system credential store. Kermet uses a stable service name and a provider/profile account name, and it does not fall back to a plaintext file when the credential store is unavailable. The only alternative is an explicit ephemeral store that retains credentials in process memory. Deleting credentials must be idempotent.
+
 ## Auditing and failure behavior
 
 Emit structured events for permission decisions, tool requests, execution boundaries, denials, timeouts, redactions, and failures. Audit records must not contain secrets or unrestricted file contents.

@@ -40,6 +40,8 @@ fn binary_prints_help() -> () {
   assert!(stdout.contains("A local coding agent"));
   assert!(stdout.contains("doctor"));
   assert!(stdout.contains("run"));
+  assert!(stdout.contains("login"));
+  assert!(stdout.contains("logout"));
 
   return;
 }
@@ -57,6 +59,8 @@ fn binary_prints_help_without_a_command() -> () {
   assert!(stdout.contains("A local coding agent"));
   assert!(stdout.contains("doctor"));
   assert!(stdout.contains("run"));
+  assert!(stdout.contains("login"));
+  assert!(stdout.contains("logout"));
 
   return;
 }

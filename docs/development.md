@@ -63,6 +63,10 @@ Before adding one:
 2. Prefer small, focused crates.
 3. Document why it is needed when it establishes a lasting architectural dependency.
 
+`ureq` is the synchronous HTTPS client for provider adapters. Codex OAuth uses it with platform certificate verification, HTTPS-only requests, bounded responses, and a timeout.
+
+`keyring` stores persistent provider credentials in the operating system credential store. Tests must use the ephemeral credential store rather than a real user keyring.
+
 ## Persisted state
 
 - Version every persisted schema.

@@ -10,7 +10,7 @@
 
 The CLI parses user input and validates the workspace before constructing a typed request for the runtime. It does not contain agent behavior, provider logic, permission decisions, or tool execution.
 
-The initial commands are `doctor` and `run`. `doctor` reports deterministic local state. Until a model provider exists, `run` validates its inputs and fails with a configuration error.
+The initial commands are `doctor`, `run`, `login`, and `logout`. `doctor` reports deterministic local state. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. Until a model provider exists, `run` validates its inputs and fails with a configuration error.
 
 ## Task request
 
@@ -27,8 +27,13 @@ The initial commands are `doctor` and `run`. `doctor` reports deterministic loca
 | Context manager | Selects the smallest useful context under a token budget. |
 | Codebase context | Indexes and retrieves files, symbols, relationships, and cached code ranges. |
 | Evidence store | Records changes, commands, test results, and validation outcomes. |
+| Credential store | Persists provider credentials through an explicit secure-storage boundary. |
 
 Tools, permissions, validation, and providers must not be implicit dependencies of the agent loop.
+
+## Credentials
+
+Provider adapters exchange provider-specific token payloads through the credential-store interface. Persistent credentials use the operating system credential store, keyed by provider and profile. An explicit ephemeral store supports tests, CI, and short-lived processes. Credential storage is independent of the workspace and agent-session stores.
 
 ## Codebase retrieval
 

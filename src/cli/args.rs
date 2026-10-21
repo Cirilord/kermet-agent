@@ -28,12 +28,38 @@ pub struct RunArgs {
   pub mode: CliPermissionMode,
 }
 
+#[derive(Args, Debug)]
+pub struct LoginArgs {
+  /// Credential profile to authenticate.
+  #[arg(long, default_value = "default", global = true)]
+  pub profile: String,
+  #[command(subcommand)]
+  pub command: Option<LoginCommand>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum LoginCommand {
+  /// Report whether the selected Codex profile is authenticated.
+  Status,
+}
+
+#[derive(Args, Debug)]
+pub struct LogoutArgs {
+  /// Credential profile to remove.
+  #[arg(long, default_value = "default")]
+  pub profile: String,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
   /// Inspect the current workspace and local prerequisites.
   Doctor(DoctorArgs),
   /// Start a task in the selected workspace.
   Run(RunArgs),
+  /// Authenticate with Codex through the browser OAuth flow.
+  Login(LoginArgs),
+  /// Remove saved Codex credentials.
+  Logout(LogoutArgs),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -55,7 +81,7 @@ impl From<CliPermissionMode> for PermissionMode {
 
 #[cfg(test)]
 mod tests {
-  use super::{Cli, CliPermissionMode, Command};
+  use super::{Cli, CliPermissionMode, Command, LoginCommand};
   use clap::Parser;
 
   #[test]
@@ -78,6 +104,20 @@ mod tests {
     assert_eq!(arguments.task, "inspect the authentication flow");
     assert_eq!(arguments.workspace, std::path::PathBuf::from("./workspace"));
     assert_eq!(arguments.mode, CliPermissionMode::WorkspaceWrite);
+
+    return;
+  }
+
+  #[test]
+  fn parses_login_status() -> () {
+    let cli = Cli::try_parse_from(["kermet", "login", "status", "--profile", "work"])
+      .expect("the command-line arguments should parse");
+    let Command::Login(arguments) = cli.command.expect("a subcommand should be present") else {
+      panic!("the login subcommand should parse");
+    };
+
+    assert!(matches!(arguments.command, Some(LoginCommand::Status)));
+    assert_eq!(arguments.profile, "work");
 
     return;
   }

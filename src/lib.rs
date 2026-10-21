@@ -4,4 +4,5 @@ pub mod models;
 pub mod providers;
 pub mod security;
 pub mod tools;
+pub mod utils;
 pub mod workspace;
