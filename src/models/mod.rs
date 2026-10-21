@@ -44,4 +44,6 @@ pub enum ModelResponse {
 }
 
 #[derive(Debug)]
-pub struct ModelProviderError;
+pub enum ModelProviderError {
+  Exhausted,
+}
