@@ -10,7 +10,7 @@
 
 The CLI parses user input and validates the workspace before constructing a typed request for the runtime. It does not contain agent behavior, provider logic, permission decisions, or tool execution.
 
-The initial commands are `doctor`, `run`, `login`, `logout`, and `config`. `doctor` reports deterministic local state. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. `config` manages non-secret model profiles. `run` resolves a typed provider, model, and reasoning-effort selection before constructing the runtime request; it fails when any selection value is missing.
+The initial commands are `doctor`, `run`, `login`, `logout`, and `config`. `doctor` reports deterministic local state. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. `config` manages non-secret model profiles. `run` resolves a typed provider, model, and reasoning-effort selection before constructing the runtime request; it fails when any selection value is missing. `run --interactive` persists a thread and reuses the same typed request and agent loop for each turn.
 
 ## Task request
 
@@ -93,7 +93,8 @@ Vector search does not replace ripgrep, symbol lookup, or the dependency graph.
 
 ## State, memory, and validation
 
-- Persist full session history, but treat it separately from the model context.
+- Internal durable resources use IDs generated and format-validated by the shared `ids` module. The resource store owns atomic collision checks when creating a record.
+- Persist full session history in versioned thread documents, but treat it separately from the model context. The initial interactive implementation sends full history; it is a temporary implementation until compaction exists.
 - Compact conversation history into structured task state: decisions, files changed, evidence, failed attempts, and pending work.
 - Store durable project knowledge with source, scope, verification time, and invalidation conditions.
 - Detect repeated actions and unchanged failures deterministically, then change strategy or request more context.

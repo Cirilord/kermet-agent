@@ -41,6 +41,24 @@ kermet run \
   "Inspect src/main.rs"
 ```
 
+## Interactive threads
+
+Start an interactive thread with `run --interactive` (or `run -i`):
+
+```sh
+kermet run -i
+```
+
+Kermet creates a thread, records the workspace and model profile selected when it was created, and prints its identifier. Enter messages until `/exit` or end-of-file closes the session. When resuming, Kermet renders the saved transcript in the same terminal format before showing the next prompt. Resume it later with:
+
+```sh
+kermet run -i --resume thread-0123456789abcdef
+```
+
+Threads are stored as versioned JSON documents in `~/.kermet/threads`. They contain the workspace path, profile name, and user and assistant messages, so do not enter secrets in a thread. Credentials remain in the operating system credential store.
+
+This initial implementation sends the recorded conversation history with each new turn. Token-aware context selection and compaction will replace that behavior in a later iteration.
+
 ## Resolution
 
 Kermet resolves provider settings in this order:

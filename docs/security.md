@@ -61,6 +61,8 @@ Persist provider credentials only through the operating system credential store.
 
 User configuration files may contain provider names, model identifiers, and reasoning settings, but never credentials or token material.
 
+Thread history is local, plaintext application data containing the workspace path and user and assistant messages. It must never contain credentials or secret material. Store it outside the workspace under the user-owned Kermet directory, validate its schema and identifier before use, and keep credential persistence separate in the operating system credential store.
+
 ## Auditing and failure behavior
 
 Emit structured events for permission decisions, tool requests, execution boundaries, denials, timeouts, redactions, and failures. Audit records must not contain secrets or unrestricted file contents.

@@ -19,7 +19,17 @@ pub struct DoctorArgs {
 #[derive(Args, Debug)]
 pub struct RunArgs {
   /// Task for Kermet to perform.
-  pub task: String,
+  #[arg(
+    required_unless_present = "interactive",
+    conflicts_with_all = ["interactive", "resume"]
+  )]
+  pub task: Option<String>,
+  /// Keep Kermet open for a sequence of messages.
+  #[arg(short, long)]
+  pub interactive: bool,
+  /// Resume an existing interactive thread.
+  #[arg(long, requires = "interactive")]
+  pub resume: Option<String>,
   /// Workspace in which the task will run.
   #[arg(long, default_value = ".")]
   pub workspace: PathBuf,
@@ -190,9 +200,45 @@ mod tests {
       panic!("the run subcommand should parse");
     };
 
-    assert_eq!(arguments.task, "inspect the authentication flow");
+    assert_eq!(
+      arguments.task.as_deref(),
+      Some("inspect the authentication flow")
+    );
     assert_eq!(arguments.workspace, std::path::PathBuf::from("./workspace"));
     assert_eq!(arguments.mode, CliPermissionMode::WorkspaceWrite);
+
+    return;
+  }
+
+  #[test]
+  fn parses_an_interactive_run_with_a_thread_to_resume() -> () {
+    let cli = Cli::try_parse_from(["kermet", "run", "-i", "--resume", "thread-0123456789abcdef"])
+      .expect("the command-line arguments should parse");
+    let Command::Run(arguments) = cli.command.expect("a subcommand should be present") else {
+      panic!("the run subcommand should parse");
+    };
+
+    assert!(arguments.interactive);
+    assert_eq!(arguments.resume.as_deref(), Some("thread-0123456789abcdef"));
+    assert_eq!(arguments.task, None);
+
+    return;
+  }
+
+  #[test]
+  fn rejects_a_thread_to_resume_without_interactive_mode() -> () {
+    let result = Cli::try_parse_from(["kermet", "run", "--resume", "thread-0123456789abcdef"]);
+
+    assert!(result.is_err());
+
+    return;
+  }
+
+  #[test]
+  fn rejects_a_task_in_interactive_mode() -> () {
+    let result = Cli::try_parse_from(["kermet", "run", "-i", "inspect the workspace"]);
+
+    assert!(result.is_err());
 
     return;
   }

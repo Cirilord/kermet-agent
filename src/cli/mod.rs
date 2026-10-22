@@ -7,6 +7,7 @@ use crate::agent::{AgentEvent, AgentLoop, AgentLoopError, TaskRequest, TaskReque
 use crate::config::{
   ConfigError, ModelOverrides, get, initialize, resolve_model_selection, set, unset, user_path,
 };
+use crate::ids::IdGenerator;
 use crate::models::{ModelEvent, ModelProviderError};
 use crate::providers::codex::auth::{
   AuthorizationRequest, CodexCredentialStore, TokenClient, UreqTokenTransport,
@@ -14,13 +15,17 @@ use crate::providers::codex::auth::{
 };
 use crate::providers::{ProviderRegistry, ProviderRegistryError};
 use crate::security::{KeyringCredentialStore, PermissionManager};
+use crate::thread::{Thread, ThreadStore, ThreadStoreError};
 use crate::tools::ToolRegistry;
 use crate::utils::CallbackServer;
 use args::{
   Command, ConfigArgs, ConfigCommand, DoctorArgs, LoginArgs, LoginCommand, LogoutArgs, RunArgs,
 };
 use clap::CommandFactory;
-use std::{io::Write, process::ExitCode};
+use std::{
+  io::{self, Write},
+  process::ExitCode,
+};
 use workspace::{WorkspaceError, open_workspace};
 
 const INVALID_INPUT_EXIT_CODE: u8 = 2;
@@ -103,6 +108,77 @@ fn report_agent_loop_error(error: &AgentLoopError) -> () {
   eprintln!("error: {message}");
 
   return;
+}
+
+fn report_thread_store_error(error: &ThreadStoreError) -> () {
+  let message = match *error {
+    ThreadStoreError::InvalidId => "the thread identifier is invalid",
+    ThreadStoreError::NotFound => "the thread does not exist",
+    ThreadStoreError::Unreadable => "the thread cannot be read",
+    ThreadStoreError::Unwritable => "the thread cannot be saved",
+    ThreadStoreError::InvalidThread => "the thread data is invalid",
+  };
+
+  eprintln!("error: {message}");
+
+  return;
+}
+
+fn execute_turn(
+  request: &TaskRequest,
+  model_selection: &crate::models::ModelSelection,
+  profile: &str,
+) -> Result<(String, bool), TurnError> {
+  let registry = ProviderRegistry::new(KeyringCredentialStore::new());
+  let provider = match registry.resolve(model_selection, profile) {
+    Ok(provider) => provider,
+    Err(error) => return Err(TurnError::Provider(error)),
+  };
+  let tools = ToolRegistry::new(PermissionManager::new());
+  let agent_loop = AgentLoop::new(provider, tools);
+  let (result, streamed_text) = {
+    let mut streamed_text = false;
+    let mut on_event = |event: AgentEvent| match event {
+      AgentEvent::Model(ModelEvent::ThinkingStarted) => println!("Thinking…"),
+      AgentEvent::Model(ModelEvent::TextDelta(delta)) => {
+        print!("{delta}");
+        let _: std::io::Result<()> = std::io::stdout().flush();
+        streamed_text = true;
+      }
+      AgentEvent::ToolCall { tool_name, target } => {
+        println!("Calling {}: {target}", tool_name.function_name());
+      }
+      AgentEvent::ToolExecution { tool_name, target } => match tool_name {
+        crate::tools::ToolName::ReadFile => println!("Reading {target}…"),
+      },
+    };
+    let result = agent_loop.execute(request, model_selection, &mut on_event);
+
+    (result, streamed_text)
+  };
+  let result = match result {
+    Ok(result) => result,
+    Err(error) => return Err(TurnError::Agent(error)),
+  };
+
+  return Ok((result.message().to_owned(), streamed_text));
+}
+
+enum TurnError {
+  Provider(ProviderRegistryError),
+  Agent(AgentLoopError),
+}
+
+fn report_turn_error(error: &TurnError) -> ExitCode {
+  let exit_code = match *error {
+    TurnError::Provider(ref error) => report_provider_registry_error(error),
+    TurnError::Agent(ref error) => {
+      report_agent_loop_error(error);
+      ExitCode::FAILURE
+    }
+  };
+
+  return exit_code;
 }
 
 fn config(arguments: ConfigArgs) -> ExitCode {
@@ -194,6 +270,17 @@ fn doctor(arguments: DoctorArgs) -> ExitCode {
 }
 
 fn run_task(arguments: RunArgs) -> ExitCode {
+  if arguments.interactive {
+    return run_interactive(arguments);
+  }
+  let task = match arguments.task {
+    Some(task) => task,
+    None => {
+      eprintln!("error: a task is required outside interactive mode");
+
+      return ExitCode::from(INVALID_INPUT_EXIT_CODE);
+    }
+  };
   let config_path = match user_path() {
     Ok(config_path) => config_path,
     Err(error) => {
@@ -220,52 +307,159 @@ fn run_task(arguments: RunArgs) -> ExitCode {
       return ExitCode::from(INVALID_INPUT_EXIT_CODE);
     }
   };
-  let request = match TaskRequest::new(arguments.task, workspace, arguments.mode.into()) {
+  let request = match TaskRequest::new(task, workspace, arguments.mode.into()) {
     Ok(request) => request,
     Err(error) => {
       report_task_request_error(&error);
       return ExitCode::from(INVALID_INPUT_EXIT_CODE);
     }
   };
-  let registry = ProviderRegistry::new(KeyringCredentialStore::new());
-  let provider = match registry.resolve(&model_selection, &arguments.profile) {
-    Ok(provider) => provider,
-    Err(error) => return report_provider_registry_error(&error),
-  };
-  let tools = ToolRegistry::new(PermissionManager::new());
-  let agent_loop = AgentLoop::new(provider, tools);
-  let (result, streamed_text) = {
-    let mut streamed_text = false;
-    let mut on_event = |event: AgentEvent| match event {
-      AgentEvent::Model(ModelEvent::ThinkingStarted) => println!("Thinking…"),
-      AgentEvent::Model(ModelEvent::TextDelta(delta)) => {
-        print!("{delta}");
-        let _: std::io::Result<()> = std::io::stdout().flush();
-        streamed_text = true;
-      }
-      AgentEvent::ToolCall { tool_name, target } => {
-        println!("Calling {}: {target}", tool_name.function_name());
-      }
-      AgentEvent::ToolExecution { tool_name, target } => match tool_name {
-        crate::tools::ToolName::ReadFile => println!("Reading {target}…"),
-      },
-    };
-    let result = agent_loop.execute(&request, &model_selection, &mut on_event);
-
-    (result, streamed_text)
-  };
-  let result = match result {
+  let (message, streamed_text) = match execute_turn(&request, &model_selection, &arguments.profile)
+  {
     Ok(result) => result,
-    Err(error) => {
-      report_agent_loop_error(&error);
-      return ExitCode::FAILURE;
-    }
+    Err(error) => return report_turn_error(&error),
   };
 
   if streamed_text {
     println!();
   } else {
-    println!("{}", result.message());
+    println!("{message}");
+  }
+
+  return ExitCode::SUCCESS;
+}
+
+fn run_interactive(arguments: RunArgs) -> ExitCode {
+  let config_path = match user_path() {
+    Ok(path) => path,
+    Err(error) => {
+      report_configuration_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+  let directory = match config_path.parent() {
+    Some(parent) => parent.join("threads"),
+    None => {
+      eprintln!("error: the thread directory cannot be resolved");
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+  let store = ThreadStore::new(directory);
+  let mut thread = match arguments.resume {
+    Some(id) => match store.load(&id) {
+      Ok(thread) => thread,
+      Err(error) => {
+        report_thread_store_error(&error);
+        return ExitCode::from(CONFIGURATION_EXIT_CODE);
+      }
+    },
+    None => {
+      let workspace = match open_workspace(arguments.workspace) {
+        Ok(workspace) => workspace,
+        Err(error) => {
+          report_workspace_error(&error);
+          return ExitCode::from(INVALID_INPUT_EXIT_CODE);
+        }
+      };
+      let id = match IdGenerator::generate("thread") {
+        Ok(id) => id,
+        Err(_) => {
+          eprintln!("error: failed to generate a thread identifier");
+          return ExitCode::FAILURE;
+        }
+      };
+      let thread = Thread::new(
+        id,
+        workspace.path().to_path_buf(),
+        arguments.profile.clone(),
+      );
+
+      match store.save(&thread) {
+        Ok(()) => thread,
+        Err(error) => {
+          report_thread_store_error(&error);
+          return ExitCode::from(CONFIGURATION_EXIT_CODE);
+        }
+      }
+    }
+  };
+  let profile = thread.profile().to_owned();
+  let overrides = ModelOverrides {
+    provider: arguments.provider,
+    model: arguments.model,
+    reasoning_effort: arguments.reasoning_effort.map(Into::into),
+  };
+  let selection = match resolve_model_selection(&config_path, &profile, overrides) {
+    Ok(selection) => selection,
+    Err(error) => {
+      report_configuration_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+
+  println!("Thread: {}", thread.id());
+  println!("Type /exit to leave the thread.");
+  let transcript = thread.render_transcript();
+
+  if !transcript.is_empty() {
+    print!("{transcript}");
+  }
+
+  loop {
+    print!("> ");
+    let _: std::io::Result<()> = io::stdout().flush();
+    let mut input = String::new();
+    let bytes_read = match io::stdin().read_line(&mut input) {
+      Ok(bytes_read) => bytes_read,
+      Err(_) => {
+        eprintln!("error: failed to read interactive input");
+        return ExitCode::FAILURE;
+      }
+    };
+    if bytes_read == 0 {
+      break;
+    }
+    let input = input.trim();
+    if input == "/exit" {
+      break;
+    }
+    if input.is_empty() {
+      continue;
+    }
+    let prompt = thread.prompt(input);
+    thread.record_user_message(input.to_owned());
+    if let Err(error) = store.save(&thread) {
+      report_thread_store_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+    let workspace = match open_workspace(thread.workspace().to_path_buf()) {
+      Ok(workspace) => workspace,
+      Err(error) => {
+        report_workspace_error(&error);
+        return ExitCode::from(INVALID_INPUT_EXIT_CODE);
+      }
+    };
+    let request = match TaskRequest::new(prompt, workspace, arguments.mode.into()) {
+      Ok(request) => request,
+      Err(error) => {
+        report_task_request_error(&error);
+        return ExitCode::from(INVALID_INPUT_EXIT_CODE);
+      }
+    };
+    let (message, streamed_text) = match execute_turn(&request, &selection, &profile) {
+      Ok(result) => result,
+      Err(error) => return report_turn_error(&error),
+    };
+    if streamed_text {
+      println!();
+    } else {
+      println!("{message}");
+    }
+    thread.record_assistant_message(message);
+    if let Err(error) = store.save(&thread) {
+      report_thread_store_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
   }
 
   return ExitCode::SUCCESS;

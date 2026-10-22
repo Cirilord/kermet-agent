@@ -1,9 +1,11 @@
 pub mod agent;
 pub mod cli;
 pub mod config;
+pub mod ids;
 pub mod models;
 pub mod providers;
 pub mod security;
+pub mod thread;
 pub mod tools;
 pub mod utils;
 pub mod workspace;
