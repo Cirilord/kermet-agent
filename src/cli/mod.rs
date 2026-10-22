@@ -3,21 +3,24 @@ mod workspace;
 
 pub use args::Cli;
 
-use crate::agent::{TaskRequest, TaskRequestError};
+use crate::agent::{AgentEvent, AgentLoop, AgentLoopError, TaskRequest, TaskRequestError};
 use crate::config::{
   ConfigError, ModelOverrides, get, initialize, resolve_model_selection, set, unset, user_path,
 };
+use crate::models::{ModelEvent, ModelProviderError};
 use crate::providers::codex::auth::{
   AuthorizationRequest, CodexCredentialStore, TokenClient, UreqTokenTransport,
   receive_authorization_code,
 };
-use crate::security::KeyringCredentialStore;
+use crate::providers::{ProviderRegistry, ProviderRegistryError};
+use crate::security::{KeyringCredentialStore, PermissionManager};
+use crate::tools::ToolRegistry;
 use crate::utils::CallbackServer;
 use args::{
   Command, ConfigArgs, ConfigCommand, DoctorArgs, LoginArgs, LoginCommand, LogoutArgs, RunArgs,
 };
 use clap::CommandFactory;
-use std::process::ExitCode;
+use std::{io::Write, process::ExitCode};
 use workspace::{WorkspaceError, open_workspace};
 
 const INVALID_INPUT_EXIT_CODE: u8 = 2;
@@ -49,6 +52,52 @@ fn report_configuration_error(error: &ConfigError) -> () {
     ConfigError::MissingModel => "no model is configured",
     ConfigError::MissingReasoningEffort => "no reasoning effort is configured",
     ConfigError::InvalidSelection(_) => "the model selection is invalid",
+  };
+
+  eprintln!("error: {message}");
+
+  return;
+}
+
+fn report_provider_registry_error(error: &ProviderRegistryError) -> ExitCode {
+  let (exit_code, message) = match *error {
+    ProviderRegistryError::UnsupportedProvider => (
+      ExitCode::from(CONFIGURATION_EXIT_CODE),
+      "the configured model provider is not supported",
+    ),
+    ProviderRegistryError::MissingCredentials => (
+      ExitCode::from(AUTHENTICATION_EXIT_CODE),
+      "the selected provider profile is not authenticated",
+    ),
+    ProviderRegistryError::CredentialStoreUnavailable => (
+      ExitCode::from(AUTHENTICATION_EXIT_CODE),
+      "secure credential storage is unavailable",
+    ),
+  };
+
+  eprintln!("error: {message}");
+
+  return exit_code;
+}
+
+fn report_agent_loop_error(error: &AgentLoopError) -> () {
+  let message = match *error {
+    AgentLoopError::Model(ModelProviderError::Exhausted) => "the model provider has no response",
+    AgentLoopError::Model(ModelProviderError::MissingCredentials) => {
+      "the model provider has no credentials"
+    }
+    AgentLoopError::Model(ModelProviderError::NotImplemented) => {
+      "the configured provider does not implement request execution"
+    }
+    AgentLoopError::Model(ModelProviderError::RequestFailed) => "the model provider request failed",
+    AgentLoopError::Model(ModelProviderError::InvalidResponse) => {
+      "the model provider returned an invalid response"
+    }
+    AgentLoopError::Model(ModelProviderError::UnsupportedToolCall) => {
+      "the model provider requested an unsupported tool"
+    }
+    AgentLoopError::Tool(_) => "a tool execution failed",
+    AgentLoopError::TurnLimitExceeded => "the agent reached its turn limit",
   };
 
   eprintln!("error: {message}");
@@ -178,19 +227,48 @@ fn run_task(arguments: RunArgs) -> ExitCode {
       return ExitCode::from(INVALID_INPUT_EXIT_CODE);
     }
   };
+  let registry = ProviderRegistry::new(KeyringCredentialStore::new());
+  let provider = match registry.resolve(&model_selection, &arguments.profile) {
+    Ok(provider) => provider,
+    Err(error) => return report_provider_registry_error(&error),
+  };
+  let tools = ToolRegistry::new(PermissionManager::new());
+  let agent_loop = AgentLoop::new(provider, tools);
+  let (result, streamed_text) = {
+    let mut streamed_text = false;
+    let mut on_event = |event: AgentEvent| match event {
+      AgentEvent::Model(ModelEvent::ThinkingStarted) => println!("Thinking…"),
+      AgentEvent::Model(ModelEvent::TextDelta(delta)) => {
+        print!("{delta}");
+        let _: std::io::Result<()> = std::io::stdout().flush();
+        streamed_text = true;
+      }
+      AgentEvent::ToolCall { tool_name, target } => {
+        println!("Calling {}: {target}", tool_name.function_name());
+      }
+      AgentEvent::ToolExecution { tool_name, target } => match tool_name {
+        crate::tools::ToolName::ReadFile => println!("Reading {target}…"),
+      },
+    };
+    let result = agent_loop.execute(&request, &model_selection, &mut on_event);
 
-  eprintln!("error: no model provider is configured");
-  eprintln!("task: {}", request.task());
-  eprintln!("workspace: {}", request.workspace().path().display());
-  eprintln!("permission mode: {}", request.permission_mode());
-  eprintln!("provider: {}", model_selection.provider());
-  eprintln!("model: {}", model_selection.model());
-  eprintln!(
-    "reasoning effort: {}",
-    model_selection.reasoning_effort().identifier()
-  );
+    (result, streamed_text)
+  };
+  let result = match result {
+    Ok(result) => result,
+    Err(error) => {
+      report_agent_loop_error(&error);
+      return ExitCode::FAILURE;
+    }
+  };
 
-  return ExitCode::from(CONFIGURATION_EXIT_CODE);
+  if streamed_text {
+    println!();
+  } else {
+    println!("{}", result.message());
+  }
+
+  return ExitCode::SUCCESS;
 }
 
 fn login(arguments: LoginArgs) -> ExitCode {

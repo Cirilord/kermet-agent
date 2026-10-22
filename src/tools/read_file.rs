@@ -130,7 +130,7 @@ impl ReadFile {
   }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ReadFileRequest {
   path: PathBuf,
   line_range: Option<LineRange>,
@@ -158,6 +158,16 @@ impl ReadFileRequest {
       path,
       line_range: Some(line_range),
     });
+  }
+
+  pub fn path(&self) -> &Path {
+    return &self.path;
+  }
+
+  pub fn line_range(&self) -> Option<(usize, usize)> {
+    let line_range = self.line_range.map(|range| return (range.start, range.end));
+
+    return line_range;
   }
 }
 

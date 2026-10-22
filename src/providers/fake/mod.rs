@@ -1,4 +1,4 @@
-use crate::models::{ModelProvider, ModelProviderError, ModelRequest, ModelResponse};
+use crate::models::{ModelEvent, ModelProvider, ModelProviderError, ModelRequest, ModelResponse};
 use std::{collections::VecDeque, sync::Mutex};
 
 pub struct FakeModelProvider {
@@ -14,7 +14,11 @@ impl FakeModelProvider {
 }
 
 impl ModelProvider for FakeModelProvider {
-  fn respond(&self, _request: ModelRequest) -> Result<ModelResponse, ModelProviderError> {
+  fn respond(
+    &self,
+    _request: ModelRequest,
+    _on_event: &mut dyn FnMut(ModelEvent),
+  ) -> Result<ModelResponse, ModelProviderError> {
     let mut responses = match self.responses.lock() {
       Ok(responses) => responses,
       Err(_) => return Err(ModelProviderError::Exhausted),

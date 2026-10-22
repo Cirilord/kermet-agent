@@ -37,6 +37,14 @@ pub enum ToolName {
 }
 
 impl ToolName {
+  pub fn function_name(&self) -> &'static str {
+    let function_name = match *self {
+      Self::ReadFile => "read_file",
+    };
+
+    return function_name;
+  }
+
   pub fn identifier(&self) -> &'static str {
     let identifier = match *self {
       Self::ReadFile => "read-file",
@@ -46,7 +54,7 @@ impl ToolName {
   }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ToolRequest {
   ReadFile(ReadFileRequest),
 }
@@ -58,6 +66,31 @@ impl ToolRequest {
     };
 
     return name;
+  }
+
+  pub fn target(&self) -> String {
+    let target = match *self {
+      Self::ReadFile(ref request) => request.path().display().to_string(),
+    };
+
+    return target;
+  }
+}
+
+impl ToolOutput {
+  pub fn model_content(&self) -> String {
+    let content = match *self {
+      Self::ReadFile(ref output) => {
+        let contents = String::from_utf8_lossy(output.contents());
+        serde_json::json!({
+          "path": output.path().display().to_string(),
+          "content": contents,
+        })
+        .to_string()
+      }
+    };
+
+    return content;
   }
 }
 

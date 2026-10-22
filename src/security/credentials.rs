@@ -58,6 +58,36 @@ pub trait CredentialStore {
   fn delete(&self, identity: &CredentialIdentity) -> Result<(), CredentialStoreError>;
 }
 
+impl<T> CredentialStore for &T
+where
+  T: CredentialStore + ?Sized,
+{
+  fn load(
+    &self,
+    identity: &CredentialIdentity,
+  ) -> Result<Option<StoredCredential>, CredentialStoreError> {
+    let credential = (*self).load(identity);
+
+    return credential;
+  }
+
+  fn save(
+    &self,
+    identity: &CredentialIdentity,
+    credential: &StoredCredential,
+  ) -> Result<(), CredentialStoreError> {
+    let result = (*self).save(identity, credential);
+
+    return result;
+  }
+
+  fn delete(&self, identity: &CredentialIdentity) -> Result<(), CredentialStoreError> {
+    let result = (*self).delete(identity);
+
+    return result;
+  }
+}
+
 pub struct KeyringCredentialStore;
 
 impl KeyringCredentialStore {

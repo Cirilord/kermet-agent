@@ -21,7 +21,8 @@ The initial commands are `doctor`, `run`, `login`, `logout`, and `config`. `doct
 | Component | Responsibility |
 | --- | --- |
 | Agent core | Runs an explicit, observable state machine for a task. |
-| Model provider | Translates provider-specific model and tool-calling protocols into internal types. |
+| Provider registry | Resolves a configured provider through its credential boundary and returns a typed provider instance. |
+| Model provider | Translates provider-specific model and tool-calling protocols into internal types, preserving each accepted tool call's identifier and validated arguments for the continuation request. |
 | Tool registry | Defines, validates, and executes available tools. |
 | Permission manager | Applies deterministic authorization policy before tool execution. |
 | Context manager | Selects the smallest useful context under a token budget. |
@@ -30,6 +31,18 @@ The initial commands are `doctor`, `run`, `login`, `logout`, and `config`. `doct
 | Credential store | Persists provider credentials through an explicit secure-storage boundary. |
 
 Tools, permissions, validation, and providers must not be implicit dependencies of the agent loop.
+
+## Model tool calls
+
+The model provider translates an accepted provider function call into a typed `ToolRequest`. The tool registry validates and executes that request locally. The agent loop then returns the original call identifier and arguments, together with the bounded tool output, to the provider so the model can continue the same task.
+
+Provider adapters validate external function-call payloads before creating domain requests. A provider payload cannot select an unavailable tool, add undeclared fields, or bypass the tool registry or permission manager.
+
+## Runtime events
+
+Providers translate safe streaming signals into model events: the start of reasoning and final-answer text deltas. The agent loop forwards those events and emits separate events when it accepts a typed tool call and when it begins executing that tool. The CLI renders these events as progress; it does not infer tool calls from unvalidated provider payloads.
+
+Streaming text is presentation data only. The completed provider response remains the authoritative result used to decide whether a turn produced a final answer or a tool request.
 
 ## Credentials
 

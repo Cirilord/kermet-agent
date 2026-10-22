@@ -106,14 +106,14 @@ fn doctor_inspects_the_requested_workspace() -> () {
 }
 
 #[test]
-fn run_fails_when_no_model_provider_is_configured() -> () {
+fn run_rejects_an_unsupported_model_provider() -> () {
   let workspace = create_workspace();
   let output = Command::new(env!("CARGO_BIN_EXE_kermet"))
     .args(["run", "inspect the project", "--workspace"])
     .arg(&workspace)
     .args([
       "--provider",
-      "codex",
+      "unsupported",
       "--model",
       "gpt-6.1-sol",
       "--reasoning-effort",
@@ -128,13 +128,7 @@ fn run_fails_when_no_model_provider_is_configured() -> () {
 
   let stderr = String::from_utf8(output.stderr).expect("run error output should be valid UTF-8");
 
-  assert!(stderr.contains("error: no model provider is configured"));
-  assert!(stderr.contains("task: inspect the project"));
-  assert!(stderr.contains(&format!("workspace: {}", workspace.display())));
-  assert!(stderr.contains("permission mode: read-only"));
-  assert!(stderr.contains("provider: codex"));
-  assert!(stderr.contains("model: gpt-6.1-sol"));
-  assert!(stderr.contains("reasoning effort: medium"));
+  assert!(stderr.contains("error: the configured model provider is not supported"));
 
   return;
 }

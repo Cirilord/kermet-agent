@@ -55,6 +55,8 @@ External integrations are disabled by default until configured and explicitly au
 
 Codex authentication may contact only `https://auth.openai.com` to exchange or refresh a token. The authorization callback is accepted only from the loopback listener, and the authorization code is accepted only when its `state` matches the request that created it. The flow uses PKCE with `S256`, limits token responses to 16 KiB, and applies a finite request timeout. Access and refresh tokens must never be logged, included in errors, or added to model context.
 
+Configured Codex inference requests use `https://chatgpt.com/backend-api/codex/responses` over HTTPS, with a finite timeout and a 2 MiB response limit. The provider sends only the selected model configuration, task, declared tool schema, and bounded tool output required for the current turn. It must validate every streamed response and function-call argument before creating an internal tool request.
+
 Persist provider credentials only through the operating system credential store. Kermet uses a stable service name and a provider/profile account name, and it does not fall back to a plaintext file when the credential store is unavailable. The only alternative is an explicit ephemeral store that retains credentials in process memory. Deleting credentials must be idempotent.
 
 User configuration files may contain provider names, model identifiers, and reasoning settings, but never credentials or token material.
