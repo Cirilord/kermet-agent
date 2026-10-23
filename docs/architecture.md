@@ -18,6 +18,10 @@ The Hub keeps session authorization, request limits, and response protections in
 
 `TaskRequest` is the typed boundary between the CLI and agent core. It contains a non-empty task, a validated workspace, and the requested permission mode. It carries domain data only: Clap types, provider configuration, and tool execution stay outside it.
 
+## Workspace catalog
+
+`Workspace` is the validated runtime representation of a directory. `WorkspaceRecord` is a separate, versioned entry in the local workspace catalog, identified by a stable `workspace-` ID and containing the validated path. `WorkspaceStore` persists those records under `~/.kermet/workspaces` using the same atomic-file pattern as threads. Existing threads continue to store their workspace path until a deliberate schema migration makes them reference a workspace record.
+
 ## Core components
 
 | Component | Responsibility |

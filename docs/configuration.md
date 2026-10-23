@@ -57,6 +57,8 @@ kermet run -i --resume thread-0123456789abcdef
 
 Threads are stored as versioned JSON documents in `~/.kermet/threads`. They contain the workspace path, profile name, and user and assistant messages, so do not enter secrets in a thread. Credentials remain in the operating system credential store.
 
+Registered workspaces are stored as versioned JSON documents in `~/.kermet/workspaces`. A workspace record has a stable identifier and a validated path. Threads still store their paths directly until their schema is migrated to use workspace identifiers.
+
 This initial implementation sends the recorded conversation history with each new turn. Token-aware context selection and compaction will replace that behavior in a later iteration.
 
 ## Hub
