@@ -71,7 +71,7 @@ Before adding one:
 
 `axum` provides HTTP routing for the local hub server, while `maud` renders its server-side HTML. `tokio` owns the hub server runtime and listener.
 
-The Hub loads Tailwind CSS, jQuery, and Lucide from their CDNs. It keeps the Base Nova semantic theme tokens in the server-rendered base layout, so it does not require a Node.js toolchain or a `package.json`.
+The Hub loads Tailwind CSS 4.3.3, jQuery 4.0.0, and Lucide 1.61.0 from their CDNs using exact version URLs. It embeds its behavior script at compile time from `src/hub/assets/hub.js` and keeps the Base Nova semantic theme tokens in the server-rendered base layout, so it does not require a Node.js toolchain or a `package.json`.
 
 ## Persisted state
 

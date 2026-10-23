@@ -2,6 +2,11 @@ use maud::{DOCTYPE, Markup, html};
 
 use super::{sidebar, theme};
 
+pub(crate) const HUB_JAVASCRIPT: &str = include_str!("../assets/hub.js");
+const TAILWIND_URL: &str = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3";
+const JQUERY_URL: &str = "https://code.jquery.com/jquery-4.0.0.min.js";
+const LUCIDE_URL: &str = "https://unpkg.com/lucide@1.61.0/dist/umd/lucide.min.js";
+
 pub(crate) fn page(title: &str, section: Option<&str>, content: Markup) -> Markup {
   let page = html! {
     (DOCTYPE)
@@ -10,9 +15,9 @@ pub(crate) fn page(title: &str, section: Option<&str>, content: Markup) -> Marku
         meta charset="utf-8";
         meta name="viewport" content="width=device-width, initial-scale=1";
         title { (title) }
-        script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" {}
-        script src="https://code.jquery.com/jquery-4.0.0.min.js" {}
-        script src="https://unpkg.com/lucide@latest" {}
+        script src=(TAILWIND_URL) {}
+        script src=(JQUERY_URL) {}
+        script src=(LUCIDE_URL) {}
         (theme())
       }
       body class="min-h-screen bg-background text-foreground antialiased" {
@@ -38,9 +43,7 @@ pub(crate) fn page(title: &str, section: Option<&str>, content: Markup) -> Marku
             main class="w-full flex-1 p-6" { (content) }
           }
         }
-        script {
-          (maud::PreEscaped("$(function () {\n  lucide.createIcons();\n\n  const $shell = $('#hub-shell');\n  const $sidebar = $('#hub-sidebar');\n  const $backdrop = $('#sidebar-backdrop');\n  const $threadsToggle = $('#threads-toggle');\n  const $threadsMenu = $('#threads-menu');\n  const $threadsChevron = $('#threads-chevron');\n\n  function closeSidebar() {\n    $sidebar.addClass('hidden').removeClass('flex');\n    $backdrop.addClass('hidden');\n  }\n\n  function toggleThreadsMenu() {\n    const isExpanded = $threadsToggle.attr('aria-expanded') === 'true';\n    const nextState = !isExpanded;\n\n    $threadsToggle.attr('aria-expanded', nextState);\n    $threadsMenu.toggleClass('hidden', !nextState);\n    $threadsChevron.toggleClass('rotate-90', nextState);\n  }\n\n  $('#sidebar-toggle').on('click', function () {\n    if (window.matchMedia('(min-width: 768px)').matches) {\n      $shell.toggleClass('sidebar-collapsed');\n      return;\n    }\n\n    $sidebar.removeClass('hidden').addClass('flex');\n    $backdrop.removeClass('hidden');\n  });\n\n  $threadsToggle.on('click', toggleThreadsMenu);\n  $('#sidebar-close, #sidebar-backdrop').on('click', closeSidebar);\n});"))
-        }
+        script { (maud::PreEscaped(HUB_JAVASCRIPT)) }
       }
     }
   };

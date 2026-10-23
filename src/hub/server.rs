@@ -10,7 +10,14 @@ use axum::{
 use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
-use super::{auth::HubAccess, views};
+use super::{
+  security::{
+    auth::{AccessDecision, HubAccess, RouteAccess, SessionTransport},
+    request_limits::enforce_request_limits,
+    response_headers::add_response_headers,
+  },
+  views,
+};
 
 #[derive(Debug)]
 pub enum HubError {
@@ -64,12 +71,14 @@ async fn serve_async(directory: PathBuf, port: u16) -> Result<(), HubError> {
     .route("/threads/{id}", get(show_thread))
     .route_layer(middleware::from_fn_with_state(
       state.clone(),
-      require_session,
+      require_read_access,
     ));
   let application = Router::new()
     .route("/bootstrap", get(bootstrap))
     .merge(protected_routes)
-    .with_state(state);
+    .layer(middleware::from_fn(enforce_request_limits))
+    .with_state(state)
+    .layer(middleware::from_fn(add_response_headers));
 
   if axum::serve(listener, application).await.is_err() {
     return Err(HubError::Serve);
@@ -93,7 +102,10 @@ async fn bootstrap(State(state): State<HubState>, Query(query): Query<BootstrapQ
   }
 
   let response = (
-    [(header::SET_COOKIE, state.access.session_cookie())],
+    [(
+      header::SET_COOKIE,
+      state.access.session_cookie(SessionTransport::Http),
+    )],
     Redirect::to("/"),
   )
     .into_response();
@@ -101,9 +113,17 @@ async fn bootstrap(State(state): State<HubState>, Query(query): Query<BootstrapQ
   return response;
 }
 
-async fn require_session(State(state): State<HubState>, request: Request, next: Next) -> Response {
-  if !state.access.is_valid_session(request.headers()) {
-    return StatusCode::UNAUTHORIZED.into_response();
+async fn require_read_access(
+  State(state): State<HubState>,
+  request: Request,
+  next: Next,
+) -> Response {
+  let decision = state.access.authorize(request.headers(), RouteAccess::Read);
+
+  match decision {
+    AccessDecision::Allowed => (),
+    AccessDecision::Unauthenticated => return StatusCode::UNAUTHORIZED.into_response(),
+    AccessDecision::MutationProtectionRequired => return StatusCode::FORBIDDEN.into_response(),
   }
 
   let response = next.run(request).await;

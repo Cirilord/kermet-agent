@@ -1,5 +1,5 @@
-mod auth;
 mod layouts;
+mod security;
 mod server;
 mod views;
 
