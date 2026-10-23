@@ -12,7 +12,7 @@ The CLI parses user input and validates the workspace before constructing a type
 
 The initial commands are `doctor`, `hub`, `run`, `login`, `logout`, and `config`. `doctor` reports deterministic local state. `hub` serves read-only, server-rendered views of persisted threads on the loopback interface. Its access boundary distinguishes reads from mutations and denies mutations until their session, origin, CSRF, and audit requirements are implemented. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. `config` manages non-secret model profiles. `run` resolves a typed provider, model, and reasoning-effort selection before constructing the runtime request; it fails when any selection value is missing. `run --interactive` persists a thread and reuses the same typed request and agent loop for each turn.
 
-The Hub keeps session authorization, request limits, and response protections in `src/hub/security/`. Its server module composes those boundaries with routes and handlers; views do not make security decisions.
+The Hub keeps session authorization, request limits, and response protections in `src/hub/security/`. Its server module composes those boundaries with routes; each controller lives in `src/hub/controllers/`, while views do not make security decisions.
 
 ## Task request
 

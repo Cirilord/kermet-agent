@@ -1,3 +1,4 @@
+mod controllers;
 mod layouts;
 mod security;
 mod server;
