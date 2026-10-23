@@ -1,14 +1,16 @@
 use crate::thread::{ThreadStore, ThreadStoreError};
 use axum::{
   Router,
-  extract::{Path, State},
-  http::StatusCode,
-  response::{Html, IntoResponse, Response},
+  extract::{Path, Query, Request, State},
+  http::{StatusCode, header},
+  middleware::{self, Next},
+  response::{Html, IntoResponse, Redirect, Response},
   routing::get,
 };
+use serde::Deserialize;
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
-use super::views;
+use super::{auth::HubAccess, views};
 
 #[derive(Debug)]
 pub enum HubError {
@@ -21,6 +23,12 @@ pub enum HubError {
 #[derive(Clone)]
 struct HubState {
   store: Arc<ThreadStore>,
+  access: Arc<HubAccess>,
+}
+
+#[derive(Deserialize)]
+struct BootstrapQuery {
+  token: String,
 }
 
 pub fn serve(directory: PathBuf, port: u16) -> Result<(), HubError> {
@@ -47,14 +55,21 @@ async fn serve_async(directory: PathBuf, port: u16) -> Result<(), HubError> {
   };
   let state = HubState {
     store: Arc::new(ThreadStore::new(directory)),
+    access: Arc::new(HubAccess::new()),
   };
-  let application = Router::new()
+  print_address(address, &state.access);
+  let protected_routes = Router::new()
     .route("/", get(home))
     .route("/threads", get(list_threads))
     .route("/threads/{id}", get(show_thread))
+    .route_layer(middleware::from_fn_with_state(
+      state.clone(),
+      require_session,
+    ));
+  let application = Router::new()
+    .route("/bootstrap", get(bootstrap))
+    .merge(protected_routes)
     .with_state(state);
-
-  print_address(address);
 
   if axum::serve(listener, application).await.is_err() {
     return Err(HubError::Serve);
@@ -63,10 +78,37 @@ async fn serve_async(directory: PathBuf, port: u16) -> Result<(), HubError> {
   return Ok(());
 }
 
-fn print_address(address: SocketAddr) -> () {
-  println!("Kermet Hub: http://{address}");
+fn print_address(address: SocketAddr, access: &HubAccess) -> () {
+  println!(
+    "Kermet Hub: http://{address}/bootstrap?token={}",
+    access.bootstrap_token()
+  );
 
   return;
+}
+
+async fn bootstrap(State(state): State<HubState>, Query(query): Query<BootstrapQuery>) -> Response {
+  if !state.access.consume_bootstrap_token(&query.token) {
+    return StatusCode::UNAUTHORIZED.into_response();
+  }
+
+  let response = (
+    [(header::SET_COOKIE, state.access.session_cookie())],
+    Redirect::to("/"),
+  )
+    .into_response();
+
+  return response;
+}
+
+async fn require_session(State(state): State<HubState>, request: Request, next: Next) -> Response {
+  if !state.access.is_valid_session(request.headers()) {
+    return StatusCode::UNAUTHORIZED.into_response();
+  }
+
+  let response = next.run(request).await;
+
+  return response;
 }
 
 async fn home() -> Html<String> {

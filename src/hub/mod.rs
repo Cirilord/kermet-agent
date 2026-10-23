@@ -1,3 +1,4 @@
+mod auth;
 mod layouts;
 mod server;
 mod views;

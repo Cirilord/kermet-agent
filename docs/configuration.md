@@ -69,7 +69,7 @@ kermet hub
 
 The hub listens on `http://127.0.0.1:3000` by default. Its home page is available at `/`, persisted threads at `/threads`, and each transcript at `/threads/{id}`. Use `--port` to select another local port.
 
-The initial hub has no session or token authentication. It is for local inspection only and must remain bound to the loopback interface until access control is implemented.
+The Hub remains bound to the loopback interface. At startup it prints a single-use bootstrap URL; open it in the local browser to establish an in-memory session. Sessions disappear when the Hub process exits.
 
 ## Resolution
 

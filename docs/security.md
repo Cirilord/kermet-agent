@@ -63,6 +63,10 @@ User configuration files may contain provider names, model identifiers, and reas
 
 Thread history is local, plaintext application data containing the workspace path and user and assistant messages. It must never contain credentials or secret material. Store it outside the workspace under the user-owned Kermet directory, validate its schema and identifier before use, and keep credential persistence separate in the operating system credential store.
 
+### Hub sessions
+
+The Hub binds only to the loopback interface. Each server process generates an in-memory, single-use bootstrap token and prints the bootstrap URL to the terminal. The bootstrap route exchanges that token for an in-memory `HttpOnly`, `SameSite=Strict` session cookie and redirects to the clean home URL. All Hub routes other than the bootstrap route deny requests without the matching session cookie. Sessions disappear when the Hub process exits.
+
 ## Auditing and failure behavior
 
 Emit structured events for permission decisions, tool requests, execution boundaries, denials, timeouts, redactions, and failures. Audit records must not contain secrets or unrestricted file contents.
