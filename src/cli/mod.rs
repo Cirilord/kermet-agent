@@ -7,6 +7,7 @@ use crate::agent::{AgentEvent, AgentLoop, AgentLoopError, TaskRequest, TaskReque
 use crate::config::{
   ConfigError, ModelOverrides, get, initialize, resolve_model_selection, set, unset, user_path,
 };
+use crate::hub::{HubError, serve};
 use crate::ids::IdGenerator;
 use crate::models::{ModelEvent, ModelProviderError};
 use crate::providers::codex::auth::{
@@ -19,7 +20,8 @@ use crate::thread::{Thread, ThreadStore, ThreadStoreError};
 use crate::tools::ToolRegistry;
 use crate::utils::CallbackServer;
 use args::{
-  Command, ConfigArgs, ConfigCommand, DoctorArgs, LoginArgs, LoginCommand, LogoutArgs, RunArgs,
+  Command, ConfigArgs, ConfigCommand, DoctorArgs, HubArgs, LoginArgs, LoginCommand, LogoutArgs,
+  RunArgs,
 };
 use clap::CommandFactory;
 use std::{
@@ -267,6 +269,46 @@ fn doctor(arguments: DoctorArgs) -> ExitCode {
   println!("Model provider: not configured");
 
   return ExitCode::SUCCESS;
+}
+
+fn hub(arguments: HubArgs) -> ExitCode {
+  let config_path = match user_path() {
+    Ok(path) => path,
+    Err(error) => {
+      report_configuration_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+  let directory = match config_path.parent() {
+    Some(parent) => parent.join("threads"),
+    None => {
+      eprintln!("error: the thread directory cannot be resolved");
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+
+  let exit_code = match serve(directory, arguments.port) {
+    Ok(()) => ExitCode::SUCCESS,
+    Err(error) => {
+      report_hub_error(&error);
+      ExitCode::FAILURE
+    }
+  };
+
+  return exit_code;
+}
+
+fn report_hub_error(error: &HubError) -> () {
+  let message = match *error {
+    HubError::Runtime => "the hub runtime could not start",
+    HubError::Bind => "the hub server could not bind to the requested port",
+    HubError::Address => "the hub server address could not be resolved",
+    HubError::Serve => "the hub server stopped unexpectedly",
+  };
+
+  eprintln!("error: {message}");
+
+  return;
 }
 
 fn run_task(arguments: RunArgs) -> ExitCode {
@@ -581,6 +623,7 @@ fn print_help() -> ExitCode {
 pub fn execute(cli: Cli) -> ExitCode {
   let exit_code = match cli.command {
     Some(Command::Doctor(arguments)) => doctor(arguments),
+    Some(Command::Hub(arguments)) => hub(arguments),
     Some(Command::Run(arguments)) => run_task(arguments),
     Some(Command::Login(arguments)) => login(arguments),
     Some(Command::Logout(arguments)) => logout(arguments),

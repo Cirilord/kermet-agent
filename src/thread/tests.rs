@@ -45,6 +45,38 @@ fn saves_and_loads_a_thread() -> () {
 }
 
 #[test]
+fn lists_saved_threads_by_identifier() -> () {
+  let directory = temporary_directory("thread-list");
+  let store = ThreadStore::new(directory.clone());
+  let first = Thread::new(
+    "thread-aaaaaaaaaaaaaaaa".to_owned(),
+    PathBuf::from("/workspace"),
+    "default".to_owned(),
+  );
+  let second = Thread::new(
+    "thread-bbbbbbbbbbbbbbbb".to_owned(),
+    PathBuf::from("/workspace"),
+    "default".to_owned(),
+  );
+
+  store
+    .save(&second)
+    .expect("the second thread should be saved");
+  store
+    .save(&first)
+    .expect("the first thread should be saved");
+  let threads = store.list().expect("the threads should be listed");
+
+  fs::remove_dir_all(directory).expect("the temporary directory should be removed");
+
+  assert_eq!(threads.len(), 2);
+  assert_eq!(threads[0].id(), "thread-aaaaaaaaaaaaaaaa");
+  assert_eq!(threads[1].id(), "thread-bbbbbbbbbbbbbbbb");
+
+  return;
+}
+
+#[test]
 fn rejects_an_invalid_thread_identifier() -> () {
   let directory = temporary_directory("thread-id");
   let store = ThreadStore::new(directory.clone());

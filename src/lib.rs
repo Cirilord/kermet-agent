@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod cli;
 pub mod config;
+pub mod hub;
 pub mod ids;
 pub mod models;
 pub mod providers;

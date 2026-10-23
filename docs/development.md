@@ -69,6 +69,10 @@ Before adding one:
 
 `toml` parses the versioned, non-secret user configuration used to resolve model profiles.
 
+`axum` provides HTTP routing for the local hub server, while `maud` renders its server-side HTML. `tokio` owns the hub server runtime and listener.
+
+The Hub loads Tailwind CSS, jQuery, and Lucide from their CDNs. It keeps the Base Nova semantic theme tokens in the server-rendered base layout, so it does not require a Node.js toolchain or a `package.json`.
+
 ## Persisted state
 
 - Version every persisted schema.

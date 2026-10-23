@@ -62,6 +62,12 @@ impl Thread {
     return &self.profile;
   }
 
+  pub fn message_count(&self) -> usize {
+    let count = self.messages.len();
+
+    return count;
+  }
+
   pub fn record_user_message(&mut self, content: String) -> () {
     self.messages.push(ThreadMessage::User { content });
     return;

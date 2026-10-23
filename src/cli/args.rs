@@ -17,6 +17,13 @@ pub struct DoctorArgs {
 }
 
 #[derive(Args, Debug)]
+pub struct HubArgs {
+  /// TCP port for the local hub server.
+  #[arg(long, default_value_t = 3000)]
+  pub port: u16,
+}
+
+#[derive(Args, Debug)]
 pub struct RunArgs {
   /// Task for Kermet to perform.
   #[arg(
@@ -123,6 +130,8 @@ pub struct ConfigCheckArgs {
 pub enum Command {
   /// Inspect the current workspace and local prerequisites.
   Doctor(DoctorArgs),
+  /// Start the local thread hub.
+  Hub(HubArgs),
   /// Start a task in the selected workspace.
   Run(RunArgs),
   /// Authenticate with Codex through the browser OAuth flow.
@@ -206,6 +215,19 @@ mod tests {
     );
     assert_eq!(arguments.workspace, std::path::PathBuf::from("./workspace"));
     assert_eq!(arguments.mode, CliPermissionMode::WorkspaceWrite);
+
+    return;
+  }
+
+  #[test]
+  fn parses_hub_arguments() -> () {
+    let cli = Cli::try_parse_from(["kermet", "hub", "--port", "4100"])
+      .expect("the command-line arguments should parse");
+    let Command::Hub(arguments) = cli.command.expect("a subcommand should be present") else {
+      panic!("the hub subcommand should parse");
+    };
+
+    assert_eq!(arguments.port, 4100);
 
     return;
   }

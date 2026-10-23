@@ -59,6 +59,18 @@ Threads are stored as versioned JSON documents in `~/.kermet/threads`. They cont
 
 This initial implementation sends the recorded conversation history with each new turn. Token-aware context selection and compaction will replace that behavior in a later iteration.
 
+## Hub
+
+Start the local, read-only thread hub with:
+
+```sh
+kermet hub
+```
+
+The hub listens on `http://127.0.0.1:3000` by default. Its home page is available at `/`, persisted threads at `/threads`, and each transcript at `/threads/{id}`. Use `--port` to select another local port.
+
+The initial hub has no session or token authentication. It is for local inspection only and must remain bound to the loopback interface until access control is implemented.
+
 ## Resolution
 
 Kermet resolves provider settings in this order:

@@ -87,6 +87,48 @@ impl ThreadStore {
     return Ok(thread);
   }
 
+  pub fn list(&self) -> Result<Vec<Thread>, ThreadStoreError> {
+    let entries = match fs::read_dir(&self.directory) {
+      Ok(entries) => entries,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+      Err(_) => return Err(ThreadStoreError::Unreadable),
+    };
+    let mut threads = Vec::new();
+
+    for entry in entries {
+      let entry = match entry {
+        Ok(entry) => entry,
+        Err(_) => return Err(ThreadStoreError::Unreadable),
+      };
+      let file_type = match entry.file_type() {
+        Ok(file_type) => file_type,
+        Err(_) => return Err(ThreadStoreError::Unreadable),
+      };
+
+      if !file_type.is_file() {
+        continue;
+      }
+
+      let file_name = entry.file_name();
+      let Some(file_name) = file_name.to_str() else {
+        return Err(ThreadStoreError::InvalidThread);
+      };
+      let Some(id) = file_name.strip_suffix(".json") else {
+        continue;
+      };
+      let thread = match self.load(id) {
+        Ok(thread) => thread,
+        Err(error) => return Err(error),
+      };
+
+      threads.push(thread);
+    }
+
+    threads.sort_by(|left, right| return left.id().cmp(right.id()));
+
+    return Ok(threads);
+  }
+
   fn path(&self, id: &str) -> PathBuf {
     return self.directory.join(format!("{id}.json"));
   }
