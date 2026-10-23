@@ -27,6 +27,9 @@ pub(crate) fn sidebar() -> Markup {
             }
             div class="sidebar-submenu ml-3.5 flex translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5" id="threads-menu" {
               a aria-current="page" class="flex h-7 min-w-0 items-center rounded-md px-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" href="/threads" { "All threads" }
+              a class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" href="/threads/new" {
+                "New thread"
+              }
             }
             /*
             span aria-disabled="true" class="sidebar-menu-button flex h-8 cursor-not-allowed items-center gap-2 overflow-hidden rounded-md p-2 text-sm text-muted-foreground opacity-60" {

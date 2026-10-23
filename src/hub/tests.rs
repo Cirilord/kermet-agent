@@ -34,6 +34,18 @@ fn renders_the_home_page() -> () {
 }
 
 #[test]
+fn renders_the_new_thread_chat() -> () {
+  let page = views::new_thread_page().into_string();
+
+  assert!(page.contains(">Start a new thread</h1>"));
+  assert!(page.contains("id=\"thread-message\""));
+  assert!(page.contains("autofocus"));
+  assert!(page.contains("disabled"));
+
+  return;
+}
+
+#[test]
 fn renders_the_application_sidebar() -> () {
   let mut thread = Thread::new(
     "thread-0123456789abcdef".to_owned(),
@@ -50,6 +62,8 @@ fn renders_the_application_sidebar() -> () {
   assert!(page.contains("data-lucide=\"messages-square\""));
   assert!(page.contains("aria-controls=\"threads-menu\""));
   assert!(page.contains("id=\"threads-menu\""));
+  assert!(page.contains("href=\"/threads/new\""));
+  assert!(page.contains(">New thread</a>"));
   assert!(page.contains(HUB_JAVASCRIPT));
 
   return;

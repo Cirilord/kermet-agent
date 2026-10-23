@@ -1,6 +1,7 @@
 mod bootstrap;
 mod home;
 mod list_threads;
+mod new_thread;
 mod show_thread;
 
 use crate::thread::ThreadStore;
@@ -12,6 +13,7 @@ use super::security::auth::HubAccess;
 pub(super) use bootstrap::bootstrap;
 pub(super) use home::home;
 pub(super) use list_threads::list_threads;
+pub(super) use new_thread::new_thread;
 pub(super) use show_thread::show_thread;
 
 #[derive(Clone)]

@@ -67,7 +67,7 @@ Start the local, read-only thread hub with:
 kermet hub
 ```
 
-The hub listens on `http://127.0.0.1:3000` by default. Its home page is available at `/`, persisted threads at `/threads`, and each transcript at `/threads/{id}`. Use `--port` to select another local port.
+The hub listens on `http://127.0.0.1:3000` by default. Its home page is available at `/`, the new-thread chat at `/threads/new`, persisted threads at `/threads`, and each transcript at `/threads/{id}`. Use `--port` to select another local port.
 
 The Hub remains bound to the loopback interface. At startup it prints a single-use bootstrap URL; open it in the local browser to establish an in-memory session. Sessions disappear when the Hub process exits.
 

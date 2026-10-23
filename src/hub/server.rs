@@ -9,7 +9,7 @@ use axum::{
 use std::{net::SocketAddr, path::PathBuf};
 
 use super::{
-  controllers::{HubState, bootstrap, home, list_threads, show_thread},
+  controllers::{HubState, bootstrap, home, list_threads, new_thread, show_thread},
   security::{
     auth::{AccessDecision, HubAccess, RouteAccess},
     request_limits::enforce_request_limits,
@@ -52,6 +52,7 @@ async fn serve_async(directory: PathBuf, port: u16) -> Result<(), HubError> {
   let protected_routes = Router::new()
     .route("/", get(home))
     .route("/threads", get(list_threads))
+    .route("/threads/new", get(new_thread))
     .route("/threads/{id}", get(show_thread))
     .route_layer(middleware::from_fn_with_state(
       state.clone(),
