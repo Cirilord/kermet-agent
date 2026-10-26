@@ -1,8 +1,13 @@
 use maud::{Markup, html};
 
-pub(crate) fn sidebar() -> Markup {
+pub(crate) fn sidebar(threads_active: bool) -> Markup {
+  let threads_class = if threads_active {
+    "sidebar-menu-button flex h-8 w-full items-center gap-2 overflow-hidden rounded-md bg-sidebar-accent p-2 text-sm font-medium text-sidebar-accent-foreground"
+  } else {
+    "sidebar-menu-button flex h-8 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+  };
   let sidebar = html! {
-    aside id="hub-sidebar" class="hub-sidebar fixed inset-y-0 left-0 z-50 hidden w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-linear md:static md:flex md:w-64" {
+    aside id="hub-sidebar" class="hub-sidebar fixed inset-y-0 left-0 z-50 hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-linear md:sticky md:inset-y-auto md:top-0 md:flex md:h-svh md:w-56 md:self-start" {
       div class="flex flex-col gap-2 p-2" {
         a class="sidebar-menu-button flex h-12 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" href="/" {
           span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground" { "K" }
@@ -20,16 +25,9 @@ pub(crate) fn sidebar() -> Markup {
         div class="flex w-full min-w-0 flex-col p-2" {
           p class="sidebar-group-label flex h-8 items-center rounded-md px-2 text-xs font-medium text-muted-foreground" { "Platform" }
           nav aria-label="Platform" class="flex w-full min-w-0 flex-col" {
-            button aria-controls="threads-menu" aria-expanded="true" class="sidebar-menu-button flex h-8 w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" id="threads-toggle" type="button" {
+            a class=(threads_class) href="/threads" {
               i aria-hidden="true" class="size-4 shrink-0" data-lucide="messages-square" {}
               span class="sidebar-label truncate" { "Threads" }
-              i aria-hidden="true" class="sidebar-label ml-auto size-4 rotate-90 transition-transform duration-200" data-lucide="chevron-right" id="threads-chevron" {}
-            }
-            div class="sidebar-submenu ml-3.5 flex translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5" id="threads-menu" {
-              a aria-current="page" class="flex h-7 min-w-0 items-center rounded-md px-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" href="/threads" { "All threads" }
-              a class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" href="/threads/new" {
-                "New thread"
-              }
             }
             /*
             span aria-disabled="true" class="sidebar-menu-button flex h-8 cursor-not-allowed items-center gap-2 overflow-hidden rounded-md p-2 text-sm text-muted-foreground opacity-60" {

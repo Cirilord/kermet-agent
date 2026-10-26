@@ -4,9 +4,6 @@ $(function () {
   const $shell = $('#hub-shell');
   const $sidebar = $('#hub-sidebar');
   const $backdrop = $('#sidebar-backdrop');
-  const $threadsToggle = $('#threads-toggle');
-  const $threadsMenu = $('#threads-menu');
-  const $threadsChevron = $('#threads-chevron');
   const $workspaceTrigger = $('#workspace-trigger');
   const $workspaceMenu = $('#workspace-menu');
   const $workspaceTriggerLabel = $('#workspace-trigger-label');
@@ -29,15 +26,6 @@ $(function () {
   function closeSidebar() {
     $sidebar.addClass('hidden').removeClass('flex');
     $backdrop.addClass('hidden');
-  }
-
-  function toggleThreadsMenu() {
-    const isExpanded = $threadsToggle.attr('aria-expanded') === 'true';
-    const nextState = !isExpanded;
-
-    $threadsToggle.attr('aria-expanded', nextState);
-    $threadsMenu.toggleClass('hidden', !nextState);
-    $threadsChevron.toggleClass('rotate-90', nextState);
   }
 
   function closeWorkspaceMenu() {
@@ -212,7 +200,6 @@ $(function () {
     $backdrop.removeClass('hidden');
   });
 
-  $threadsToggle.on('click', toggleThreadsMenu);
   $('#sidebar-close, #sidebar-backdrop').on('click', closeSidebar);
 
   $workspaceTrigger.on('click', function () {

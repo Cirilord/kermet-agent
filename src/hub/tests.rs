@@ -71,14 +71,17 @@ fn renders_the_application_sidebar() -> () {
   let page = views::thread_detail_page(&thread, "csrf-token").into_string();
 
   assert!(page.contains("id=\"hub-sidebar\""));
+  assert!(page.contains("md:sticky"));
+  assert!(page.contains("md:h-svh"));
   assert!(page.contains(">Platform</p>"));
   assert!(page.contains("id=\"sidebar-toggle\""));
   assert!(page.contains("data-lucide=\"panel-left\""));
+  assert!(page.contains("sticky top-0 z-30"));
   assert!(page.contains("data-lucide=\"messages-square\""));
-  assert!(page.contains("aria-controls=\"threads-menu\""));
-  assert!(page.contains("id=\"threads-menu\""));
-  assert!(page.contains("href=\"/threads/new\""));
-  assert!(page.contains(">New thread</a>"));
+  assert!(page.contains("href=\"/threads\""));
+  assert!(page.contains(">Threads</span>"));
+  assert!(!page.contains("id=\"threads-menu\""));
+  assert!(!page.contains("id=\"threads-toggle\""));
   assert!(page.contains(HUB_JAVASCRIPT));
 
   return;

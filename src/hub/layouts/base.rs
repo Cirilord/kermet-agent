@@ -23,9 +23,9 @@ pub(crate) fn page(title: &str, section: Option<&str>, content: Markup) -> Marku
       body class="min-h-screen bg-background text-foreground antialiased" {
         div class="fixed inset-0 z-40 hidden bg-foreground/80 md:hidden" id="sidebar-backdrop" {}
         div class="hub-shell flex min-h-svh w-full" id="hub-shell" {
-          (sidebar())
+          (sidebar(section == Some("Threads")))
           div class="flex min-w-0 flex-1 flex-col bg-background" {
-            header class="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4" {
+            header class="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4" {
               button aria-label="Toggle sidebar" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" id="sidebar-toggle" type="button" {
                 i aria-hidden="true" class="size-4" data-lucide="panel-left" {}
               }
