@@ -5,12 +5,26 @@ pub(super) const SCHEMA_VERSION: u8 = 1;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "role", content = "content", rename_all = "lowercase")]
-enum ThreadMessage {
+pub enum ThreadMessage {
   User { content: String },
   Assistant { content: String },
 }
 
 impl ThreadMessage {
+  pub fn content(&self) -> &str {
+    let content = match *self {
+      Self::User { ref content } | Self::Assistant { ref content } => content,
+    };
+
+    return content;
+  }
+
+  pub fn is_user(&self) -> bool {
+    let is_user = matches!(*self, Self::User { .. });
+
+    return is_user;
+  }
+
   fn render_for_prompt(&self) -> String {
     let rendered = match *self {
       Self::User { ref content } => format!("User: {content}"),
@@ -66,6 +80,23 @@ impl Thread {
     let count = self.messages.len();
 
     return count;
+  }
+
+  pub fn messages(&self) -> &[ThreadMessage] {
+    return &self.messages;
+  }
+
+  pub fn latest_user_message(&self) -> Option<&str> {
+    for message in self.messages.iter().rev() {
+      let content = match *message {
+        ThreadMessage::User { ref content } => content,
+        ThreadMessage::Assistant { .. } => continue,
+      };
+
+      return Some(content);
+    }
+
+    return None;
   }
 
   pub fn record_user_message(&mut self, content: String) -> () {

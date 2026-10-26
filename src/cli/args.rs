@@ -21,6 +21,8 @@ pub struct HubArgs {
   /// TCP port for the local hub server.
   #[arg(long, default_value_t = 3000)]
   pub port: u16,
+  #[arg(long = "open-picker", hide = true)]
+  pub open_picker: bool,
 }
 
 #[derive(Args, Debug)]
@@ -228,6 +230,20 @@ mod tests {
     };
 
     assert_eq!(arguments.port, 4100);
+
+    return;
+  }
+
+  #[test]
+  fn parses_the_hidden_hub_picker_flag() -> () {
+    let cli = Cli::try_parse_from(["kermet", "hub", "--open-picker"])
+      .expect("the internal hub picker flag should parse");
+
+    let Command::Hub(arguments) = cli.command.expect("a subcommand should be present") else {
+      panic!("the hub picker flag should parse");
+    };
+
+    assert!(arguments.open_picker);
 
     return;
   }

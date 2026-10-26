@@ -10,9 +10,9 @@
 
 The CLI parses user input and validates the workspace before constructing a typed request for the runtime. It does not contain agent behavior, provider logic, permission decisions, or tool execution.
 
-The initial commands are `doctor`, `hub`, `run`, `login`, `logout`, and `config`. `doctor` reports deterministic local state. `hub` serves read-only, server-rendered views of persisted threads on the loopback interface. Its access boundary distinguishes reads from mutations and denies mutations until their session, origin, CSRF, and audit requirements are implemented. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. `config` manages non-secret model profiles. `run` resolves a typed provider, model, and reasoning-effort selection before constructing the runtime request; it fails when any selection value is missing. `run --interactive` persists a thread and reuses the same typed request and agent loop for each turn.
+The initial commands are `doctor`, `hub`, `run`, `login`, `logout`, and `config`. `doctor` reports deterministic local state. `hub` serves server-rendered views of persisted threads on the loopback interface. Its workspace-picker route starts a restricted internal picker process with a hidden flag, validates and persists the selected workspace, and requires session, exact-origin, and CSRF checks. The Hub persists a new thread and its first user message, opens its Server-Sent Events stream, then starts the initial turn. Later messages use the same persisted thread and turn boundary. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. `config` manages non-secret model profiles. `run` resolves a typed provider, model, and reasoning-effort selection before constructing the runtime request; it fails when any selection value is missing. `run --interactive` persists a thread and reuses the same typed request and agent loop for each turn.
 
-The Hub keeps session authorization, request limits, and response protections in `src/hub/security/`. Its server module composes those boundaries with routes; each controller lives in `src/hub/controllers/`, while views do not make security decisions.
+The Hub keeps session authorization, request limits, and response protections in `src/hub/security/`. Its server module composes those boundaries with routes; server-rendered page controllers live in `src/hub/controllers/`, JSON endpoints live in `src/hub/api/`, and views do not make security decisions.
 
 ## Task request
 
@@ -40,13 +40,13 @@ Tools, permissions, validation, and providers must not be implicit dependencies 
 
 ## Model tool calls
 
-The model provider translates an accepted provider function call into a typed `ToolRequest`. The tool registry validates and executes that request locally. The agent loop then returns the original call identifier and arguments, together with the bounded tool output, to the provider so the model can continue the same task.
+The model provider translates an accepted provider function call into a typed `ToolRequest`. The tool registry validates and executes that request locally. The agent loop then returns the original call identifier and arguments, together with the bounded tool output, to the provider so the model can continue the same task. A rejected or failed tool operation returns a generic failure result to the model; it does not expose internal errors or end the whole turn before the model can explain the outcome.
 
 Provider adapters validate external function-call payloads before creating domain requests. A provider payload cannot select an unavailable tool, add undeclared fields, or bypass the tool registry or permission manager.
 
 ## Runtime events
 
-Providers translate safe streaming signals into model events: the start of reasoning and final-answer text deltas. The agent loop forwards those events and emits separate events when it accepts a typed tool call and when it begins executing that tool. The CLI renders these events as progress; it does not infer tool calls from unvalidated provider payloads.
+Providers translate safe streaming signals into model events: the start of reasoning and final-answer text deltas. The agent loop forwards those events and emits separate events when it accepts a typed tool call and when it begins executing that tool. The CLI and Hub render these events as progress; the Hub uses a per-thread Server-Sent Events stream. Neither interface infers tool calls from unvalidated provider payloads.
 
 Streaming text is presentation data only. The completed provider response remains the authoritative result used to decide whether a turn produced a final answer or a tool request.
 

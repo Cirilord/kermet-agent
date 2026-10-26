@@ -71,7 +71,12 @@ pub(super) fn request_limit_violation(request: &Request) -> Option<StatusCode> {
     Err(_) => return Some(StatusCode::BAD_REQUEST),
   };
 
-  if content_length > 0 {
+  let path = request.uri().path();
+  let accepts_body = request.method() == axum::http::Method::POST
+    && (path == "/api/threads"
+      || (path.starts_with("/api/threads/") && path.ends_with("/messages")));
+
+  if content_length > 4096 || (content_length > 0 && !accepts_body) {
     return Some(StatusCode::PAYLOAD_TOO_LARGE);
   }
 

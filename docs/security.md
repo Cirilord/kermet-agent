@@ -69,9 +69,11 @@ The Hub binds only to the loopback interface. Each server process generates an i
 
 The local Hub currently uses HTTP on loopback, so its cookie cannot include `Secure`. The session-cookie boundary takes an explicit transport value and adds `Secure` whenever the Hub is served over HTTPS. Do not expose the Hub beyond loopback until HTTPS is configured.
 
-### Future Hub mutations
+### Hub mutations
 
-The Hub has no mutation routes. Access control distinguishes read routes from mutation routes: authenticated reads are allowed, while mutations fail closed until mutation protection exists. A new route that creates, changes, or deletes data must use the mutation access boundary and implement all of the following in the same change:
+Authenticated Hub reads are allowed. The workspace-picker endpoint is a protected `POST` route that starts the current Kermet executable with the fixed hidden `hub --open-picker` command. The child process opens a native folder dialog and writes one bounded JSON result to standard output; it receives no browser-controlled arguments, no standard input, and no inherited standard error. The parent applies a two-minute timeout, kills an unfinished child, accepts at most 16 KiB of output, canonicalizes and validates the selected directory, and persists a workspace record. The route validates the session, exact loopback `Origin`, and a server-generated synchronizer CSRF token before starting the picker.
+
+A new route that creates, changes, or deletes data must use the mutation access boundary and implement all of the following in the same change:
 
 - require the valid session;
 - validate an expected `Origin` before parsing or changing data;
@@ -79,11 +81,11 @@ The Hub has no mutation routes. Access control distinguishes read routes from mu
 - emit an audit event with the action, target, session identifier or a non-secret session correlation value, result, and failure reason when applicable;
 - use a non-`GET` method and retain the request limits appropriate to its input.
 
-CSRF tokens, origin validation, and mutation audit events are intentionally not implemented while every Hub route is read-only. They must not be added as optional middleware or bypassed by an individual route.
+CSRF tokens, origin validation, and mutation audit events are mandatory for Hub mutation routes. They must not be optional middleware or bypassed by an individual route.
 
 Every Hub response disables browser caching and includes content-security, anti-framing, anti-sniffing, referrer, opener, and permissions policies. The Hub embeds its behavior script from the compile-time `src/hub/assets/hub.js` asset. Its content-security policy authorizes that script only through its SHA-256 hash; it does not permit inline scripts generally.
 
-The Hub currently exposes read-only `GET` routes, so it rejects request bodies. It also rejects request targets larger than 2 KiB, more than 32 request headers, and request headers larger than 8 KiB in total. These limits must be reconsidered deliberately before introducing a route that accepts request data.
+The Hub accepts JSON request bodies only when creating a thread or adding a message. Each body is limited to 4 KiB; all other routes, including the folder-picker and initial-turn endpoints, reject non-empty bodies. It rejects request targets larger than 2 KiB, more than 32 request headers, and request headers larger than 8 KiB in total. These limits must be reconsidered deliberately before introducing a route that accepts request data.
 
 ## Auditing and failure behavior
 

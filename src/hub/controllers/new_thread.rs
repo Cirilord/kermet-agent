@@ -1,7 +1,16 @@
-use axum::response::Html;
+use axum::{extract::State, response::Html};
 
-pub(in super::super) async fn new_thread() -> Html<String> {
-  let page = super::super::views::new_thread_page().into_string();
+use super::{HubResponseError, HubState};
 
-  return Html(page);
+pub(in super::super) async fn new_thread(
+  State(state): State<HubState>,
+) -> Result<Html<String>, HubResponseError> {
+  let workspaces = match state.workspace_store().list() {
+    Ok(workspaces) => workspaces,
+    Err(_) => return Err(HubResponseError::WorkspaceStore),
+  };
+  let page =
+    super::super::views::new_thread_page(&workspaces, state.access().csrf_token()).into_string();
+
+  return Ok(Html(page));
 }

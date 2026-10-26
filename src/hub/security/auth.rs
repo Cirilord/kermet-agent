@@ -10,13 +10,15 @@ pub(in super::super) enum AccessDecision {
   Allowed,
   Unauthenticated,
   MutationProtectionRequired,
+  InvalidOrigin,
+  InvalidCsrfToken,
 }
 
 pub(in super::super) enum RouteAccess {
   Read,
   #[allow(
     dead_code,
-    reason = "The Hub has no mutation routes until its complete protection boundary exists."
+    reason = "Mutation routes use authorize_mutation because they require origin and CSRF validation."
   )]
   Mutation,
 }
@@ -33,6 +35,7 @@ pub(in super::super) enum SessionTransport {
 pub(in super::super) struct HubAccess {
   bootstrap_token: String,
   session_token: String,
+  csrf_token: String,
   bootstrap_consumed: AtomicBool,
 }
 
@@ -40,16 +43,22 @@ impl HubAccess {
   pub(in super::super) fn new() -> Self {
     let bootstrap_token = generate_token();
     let session_token = generate_token();
+    let csrf_token = generate_token();
 
     return Self {
       bootstrap_token,
       session_token,
+      csrf_token,
       bootstrap_consumed: AtomicBool::new(false),
     };
   }
 
   pub(in super::super) fn bootstrap_token(&self) -> &str {
     return &self.bootstrap_token;
+  }
+
+  pub(in super::super) fn csrf_token(&self) -> &str {
+    return &self.csrf_token;
   }
 
   pub(in super::super) fn consume_bootstrap_token(&self, candidate: &str) -> bool {
@@ -91,6 +100,43 @@ impl HubAccess {
     };
 
     return decision;
+  }
+
+  pub(in super::super) fn authorize_mutation(
+    &self,
+    headers: &HeaderMap,
+    expected_origin: &str,
+  ) -> AccessDecision {
+    if !self.is_valid_session(headers) {
+      return AccessDecision::Unauthenticated;
+    }
+    let origin = match headers.get(header::ORIGIN) {
+      Some(origin) => origin,
+      None => return AccessDecision::InvalidOrigin,
+    };
+    let origin = match origin.to_str() {
+      Ok(origin) => origin,
+      Err(_) => return AccessDecision::InvalidOrigin,
+    };
+
+    if origin != expected_origin {
+      return AccessDecision::InvalidOrigin;
+    }
+
+    let csrf_token = match headers.get("x-kermet-csrf") {
+      Some(csrf_token) => csrf_token,
+      None => return AccessDecision::InvalidCsrfToken,
+    };
+    let csrf_token = match csrf_token.to_str() {
+      Ok(csrf_token) => csrf_token,
+      Err(_) => return AccessDecision::InvalidCsrfToken,
+    };
+
+    if csrf_token != self.csrf_token {
+      return AccessDecision::InvalidCsrfToken;
+    }
+
+    return AccessDecision::Allowed;
   }
 
   pub(in super::super) fn session_cookie(&self, transport: SessionTransport) -> String {

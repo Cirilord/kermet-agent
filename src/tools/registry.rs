@@ -78,6 +78,10 @@ impl ToolRequest {
 }
 
 impl ToolOutput {
+  pub fn failure() -> Self {
+    return Self::Failure;
+  }
+
   pub fn model_content(&self) -> String {
     let content = match *self {
       Self::ReadFile(ref output) => {
@@ -88,6 +92,10 @@ impl ToolOutput {
         })
         .to_string()
       }
+      Self::Failure => serde_json::json!({
+        "error": "The requested tool operation could not be completed.",
+      })
+      .to_string(),
     };
 
     return content;
@@ -97,9 +105,27 @@ impl ToolOutput {
 #[derive(Debug)]
 pub enum ToolOutput {
   ReadFile(ReadFileOutput),
+  Failure,
 }
 
 #[derive(Debug)]
 pub enum ToolExecutionError {
   ReadFile(ReadFileError),
+}
+
+#[cfg(test)]
+mod tests {
+  use super::ToolOutput;
+
+  #[test]
+  fn renders_a_safe_failure_for_the_model() -> () {
+    let output = ToolOutput::failure();
+
+    assert_eq!(
+      output.model_content(),
+      r#"{"error":"The requested tool operation could not be completed."}"#
+    );
+
+    return;
+  }
 }

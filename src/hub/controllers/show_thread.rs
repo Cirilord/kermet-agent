@@ -15,7 +15,8 @@ pub(in super::super) async fn show_thread(
     Err(ThreadStoreError::NotFound) => return Err(HubResponseError::NotFound),
     Err(_) => return Err(HubResponseError::ThreadStore),
   };
-  let page = super::super::views::thread_detail_page(&thread).into_string();
+  let page =
+    super::super::views::thread_detail_page(&thread, state.access().csrf_token()).into_string();
 
   return Ok(Html(page));
 }

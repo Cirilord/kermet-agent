@@ -3,27 +3,28 @@ mod workspace;
 
 pub use args::Cli;
 
-use crate::agent::{AgentEvent, AgentLoop, AgentLoopError, TaskRequest, TaskRequestError};
+use crate::agent::{AgentEvent, AgentLoopError, TaskRequest, TaskRequestError};
 use crate::config::{
   ConfigError, ModelOverrides, get, initialize, resolve_model_selection, set, unset, user_path,
 };
 use crate::hub::{HubError, serve};
 use crate::ids::IdGenerator;
 use crate::models::{ModelEvent, ModelProviderError};
+use crate::providers::ProviderRegistryError;
 use crate::providers::codex::auth::{
   AuthorizationRequest, CodexCredentialStore, TokenClient, UreqTokenTransport,
   receive_authorization_code,
 };
-use crate::providers::{ProviderRegistry, ProviderRegistryError};
-use crate::security::{KeyringCredentialStore, PermissionManager};
+use crate::security::KeyringCredentialStore;
 use crate::thread::{Thread, ThreadStore, ThreadStoreError};
-use crate::tools::ToolRegistry;
+use crate::turn::{TurnError, execute_turn};
 use crate::utils::CallbackServer;
 use args::{
   Command, ConfigArgs, ConfigCommand, DoctorArgs, HubArgs, LoginArgs, LoginCommand, LogoutArgs,
   RunArgs,
 };
 use clap::CommandFactory;
+use rfd::FileDialog;
 use std::{
   io::{self, Write},
   process::ExitCode,
@@ -126,49 +127,23 @@ fn report_thread_store_error(error: &ThreadStoreError) -> () {
   return;
 }
 
-fn execute_turn(
-  request: &TaskRequest,
-  model_selection: &crate::models::ModelSelection,
-  profile: &str,
-) -> Result<(String, bool), TurnError> {
-  let registry = ProviderRegistry::new(KeyringCredentialStore::new());
-  let provider = match registry.resolve(model_selection, profile) {
-    Ok(provider) => provider,
-    Err(error) => return Err(TurnError::Provider(error)),
-  };
-  let tools = ToolRegistry::new(PermissionManager::new());
-  let agent_loop = AgentLoop::new(provider, tools);
-  let (result, streamed_text) = {
-    let mut streamed_text = false;
-    let mut on_event = |event: AgentEvent| match event {
-      AgentEvent::Model(ModelEvent::ThinkingStarted) => println!("Thinking…"),
-      AgentEvent::Model(ModelEvent::TextDelta(delta)) => {
-        print!("{delta}");
-        let _: std::io::Result<()> = std::io::stdout().flush();
-        streamed_text = true;
-      }
-      AgentEvent::ToolCall { tool_name, target } => {
-        println!("Calling {}: {target}", tool_name.function_name());
-      }
-      AgentEvent::ToolExecution { tool_name, target } => match tool_name {
-        crate::tools::ToolName::ReadFile => println!("Reading {target}…"),
-      },
-    };
-    let result = agent_loop.execute(request, model_selection, &mut on_event);
+fn render_agent_event(event: AgentEvent, streamed_text: &mut bool) -> () {
+  match event {
+    AgentEvent::Model(ModelEvent::ThinkingStarted) => println!("Thinking…"),
+    AgentEvent::Model(ModelEvent::TextDelta(delta)) => {
+      print!("{delta}");
+      let _: std::io::Result<()> = std::io::stdout().flush();
+      *streamed_text = true;
+    }
+    AgentEvent::ToolCall { tool_name, target } => {
+      println!("Calling {}: {target}", tool_name.function_name())
+    }
+    AgentEvent::ToolExecution { tool_name, target } => match tool_name {
+      crate::tools::ToolName::ReadFile => println!("Reading {target}…"),
+    },
+  }
 
-    (result, streamed_text)
-  };
-  let result = match result {
-    Ok(result) => result,
-    Err(error) => return Err(TurnError::Agent(error)),
-  };
-
-  return Ok((result.message().to_owned(), streamed_text));
-}
-
-enum TurnError {
-  Provider(ProviderRegistryError),
-  Agent(AgentLoopError),
+  return;
 }
 
 fn report_turn_error(error: &TurnError) -> ExitCode {
@@ -272,6 +247,10 @@ fn doctor(arguments: DoctorArgs) -> ExitCode {
 }
 
 fn hub(arguments: HubArgs) -> ExitCode {
+  if arguments.open_picker {
+    return hub_open_picker();
+  }
+
   let config_path = match user_path() {
     Ok(path) => path,
     Err(error) => {
@@ -279,15 +258,15 @@ fn hub(arguments: HubArgs) -> ExitCode {
       return ExitCode::from(CONFIGURATION_EXIT_CODE);
     }
   };
-  let directory = match config_path.parent() {
-    Some(parent) => parent.join("threads"),
+  let (thread_directory, workspace_directory) = match config_path.parent() {
+    Some(parent) => (parent.join("threads"), parent.join("workspaces")),
     None => {
-      eprintln!("error: the thread directory cannot be resolved");
+      eprintln!("error: the Kermet data directory cannot be resolved");
       return ExitCode::from(CONFIGURATION_EXIT_CODE);
     }
   };
 
-  let exit_code = match serve(directory, arguments.port) {
+  let exit_code = match serve(thread_directory, workspace_directory, arguments.port) {
     Ok(()) => ExitCode::SUCCESS,
     Err(error) => {
       report_hub_error(&error);
@@ -296,6 +275,26 @@ fn hub(arguments: HubArgs) -> ExitCode {
   };
 
   return exit_code;
+}
+
+fn hub_open_picker() -> ExitCode {
+  let path = FileDialog::new()
+    .set_title("Select a workspace folder")
+    .pick_folder();
+  let path = path.map(|path| {
+    let path = path.display().to_string();
+
+    return path;
+  });
+  let output = serde_json::json!({ "path": path });
+  let output = match serde_json::to_string(&output) {
+    Ok(output) => output,
+    Err(_) => return ExitCode::FAILURE,
+  };
+
+  println!("{output}");
+
+  return ExitCode::SUCCESS;
 }
 
 fn report_hub_error(error: &HubError) -> () {
@@ -356,8 +355,14 @@ fn run_task(arguments: RunArgs) -> ExitCode {
       return ExitCode::from(INVALID_INPUT_EXIT_CODE);
     }
   };
-  let (message, streamed_text) = match execute_turn(&request, &model_selection, &arguments.profile)
-  {
+  let mut streamed_text = false;
+  let mut on_event = |event| render_agent_event(event, &mut streamed_text);
+  let message = match execute_turn(
+    &request,
+    &model_selection,
+    &arguments.profile,
+    &mut on_event,
+  ) {
     Ok(result) => result,
     Err(error) => return report_turn_error(&error),
   };
@@ -488,7 +493,9 @@ fn run_interactive(arguments: RunArgs) -> ExitCode {
         return ExitCode::from(INVALID_INPUT_EXIT_CODE);
       }
     };
-    let (message, streamed_text) = match execute_turn(&request, &selection, &profile) {
+    let mut streamed_text = false;
+    let mut on_event = |event| render_agent_event(event, &mut streamed_text);
+    let message = match execute_turn(&request, &selection, &profile, &mut on_event) {
       Ok(result) => result,
       Err(error) => return report_turn_error(&error),
     };

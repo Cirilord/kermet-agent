@@ -4,7 +4,7 @@ use crate::{
     ModelEvent, ModelProvider, ModelProviderError, ModelRequest, ModelResponse, ModelSelection,
     ModelToolCall,
   },
-  tools::{ToolExecutionError, ToolName, ToolRegistry},
+  tools::{ToolExecutionError, ToolName, ToolOutput, ToolRegistry},
 };
 
 const MAX_TURNS: usize = 16;
@@ -47,7 +47,7 @@ impl<P: ModelProvider> AgentLoop<P> {
           on_event(AgentEvent::ToolExecution { tool_name, target });
           let tool_output = match self.tools.execute(task, tool_request.clone()) {
             Ok(tool_output) => tool_output,
-            Err(error) => return Err(AgentLoopError::Tool(error)),
+            Err(_) => ToolOutput::failure(),
           };
           let tool_call = ModelToolCall::new(tool_call_id, tool_request, arguments);
           request =

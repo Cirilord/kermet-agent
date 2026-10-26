@@ -1,3 +1,4 @@
+mod api;
 mod controllers;
 mod layouts;
 mod security;

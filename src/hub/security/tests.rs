@@ -41,7 +41,7 @@ fn accepts_only_the_issued_session_cookie() -> () {
 }
 
 #[test]
-fn denies_mutations_until_mutation_protection_exists() -> () {
+fn keeps_the_generic_mutation_boundary_fail_closed() -> () {
   let access = HubAccess::new();
   let cookie = access.session_cookie(SessionTransport::Http);
   let mut headers = HeaderMap::new();
@@ -55,6 +55,38 @@ fn denies_mutations_until_mutation_protection_exists() -> () {
   assert_eq!(
     access.authorize(&headers, RouteAccess::Mutation),
     AccessDecision::MutationProtectionRequired
+  );
+
+  return;
+}
+
+#[test]
+fn requires_session_origin_and_csrf_token_for_mutations() -> () {
+  let access = HubAccess::new();
+  let cookie = access.session_cookie(SessionTransport::Http);
+  let mut headers = HeaderMap::new();
+  let cookie = HeaderValue::from_str(&cookie).expect("the generated cookie should be valid");
+  headers.insert(header::COOKIE, cookie);
+  headers.insert(
+    header::ORIGIN,
+    HeaderValue::from_static("http://127.0.0.1:3000"),
+  );
+  let csrf_token =
+    HeaderValue::from_str(access.csrf_token()).expect("the generated CSRF token should be valid");
+  headers.insert("x-kermet-csrf", csrf_token);
+
+  assert_eq!(
+    access.authorize_mutation(&headers, "http://127.0.0.1:3000"),
+    AccessDecision::Allowed
+  );
+  assert_eq!(
+    access.authorize_mutation(&headers, "http://localhost:3000"),
+    AccessDecision::InvalidOrigin
+  );
+  headers.insert("x-kermet-csrf", HeaderValue::from_static("invalid"));
+  assert_eq!(
+    access.authorize_mutation(&headers, "http://127.0.0.1:3000"),
+    AccessDecision::InvalidCsrfToken
   );
 
   return;
@@ -120,6 +152,20 @@ fn rejects_requests_with_bodies() -> () {
     request_limit_violation(&request),
     Some(axum::http::StatusCode::PAYLOAD_TOO_LARGE)
   );
+
+  return;
+}
+
+#[test]
+fn accepts_a_bounded_thread_message_body() -> () {
+  let request = axum::http::Request::builder()
+    .method(axum::http::Method::POST)
+    .uri("/api/threads/thread-0123456789abcdef/messages")
+    .header(header::CONTENT_LENGTH, "1")
+    .body(Body::empty())
+    .expect("the test request should be valid");
+
+  assert_eq!(request_limit_violation(&request), None);
 
   return;
 }
