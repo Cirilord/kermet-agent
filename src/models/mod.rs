@@ -4,7 +4,7 @@ pub use selection::{ModelSelection, ModelSelectionError, ReasoningEffort};
 
 use crate::{
   agent::TaskRequest,
-  tools::{ToolOutput, ToolRequest},
+  tools::{ToolName, ToolOutput, ToolRequest},
 };
 
 pub trait ModelProvider {
@@ -92,6 +92,12 @@ impl ModelToolCall {
 
   pub fn arguments(&self) -> &str {
     return &self.arguments;
+  }
+
+  pub fn tool_name(&self) -> ToolName {
+    let tool_name = self.request.name();
+
+    return tool_name;
   }
 
   pub fn into_parts(self) -> (String, ToolRequest, String) {

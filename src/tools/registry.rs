@@ -1,16 +1,21 @@
 use crate::{
   agent::TaskRequest,
   security::PermissionManager,
-  tools::{ReadFile, ReadFileError, ReadFileOutput, ReadFileRequest},
+  tools::{
+    Bash, BashError, BashOutput, BashRequest, ReadFile, ReadFileError, ReadFileOutput,
+    ReadFileRequest,
+  },
 };
 
 pub struct ToolRegistry {
+  bash: Bash,
   read_file: ReadFile,
 }
 
 impl ToolRegistry {
   pub fn new(permission_manager: PermissionManager) -> Self {
     return Self {
+      bash: Bash::new(permission_manager.clone()),
       read_file: ReadFile::new(permission_manager),
     };
   }
@@ -21,6 +26,10 @@ impl ToolRegistry {
     request: ToolRequest,
   ) -> Result<ToolOutput, ToolExecutionError> {
     let output = match request {
+      ToolRequest::Bash(request) => match self.bash.execute(task, request) {
+        Ok(output) => ToolOutput::Bash(output),
+        Err(error) => return Err(ToolExecutionError::Bash(error)),
+      },
       ToolRequest::ReadFile(request) => match self.read_file.execute(task, request) {
         Ok(output) => ToolOutput::ReadFile(output),
         Err(error) => return Err(ToolExecutionError::ReadFile(error)),
@@ -33,12 +42,14 @@ impl ToolRegistry {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ToolName {
+  Bash,
   ReadFile,
 }
 
 impl ToolName {
   pub fn function_name(&self) -> &'static str {
     let function_name = match *self {
+      Self::Bash => "bash",
       Self::ReadFile => "read_file",
     };
 
@@ -47,6 +58,7 @@ impl ToolName {
 
   pub fn identifier(&self) -> &'static str {
     let identifier = match *self {
+      Self::Bash => "bash",
       Self::ReadFile => "read-file",
     };
 
@@ -56,12 +68,14 @@ impl ToolName {
 
 #[derive(Clone, Debug)]
 pub enum ToolRequest {
+  Bash(BashRequest),
   ReadFile(ReadFileRequest),
 }
 
 impl ToolRequest {
   pub fn name(&self) -> ToolName {
     let name = match *self {
+      Self::Bash(_) => ToolName::Bash,
       Self::ReadFile(_) => ToolName::ReadFile,
     };
 
@@ -70,6 +84,7 @@ impl ToolRequest {
 
   pub fn target(&self) -> String {
     let target = match *self {
+      Self::Bash(ref request) => request.command().to_owned(),
       Self::ReadFile(ref request) => request.path().display().to_string(),
     };
 
@@ -84,6 +99,19 @@ impl ToolOutput {
 
   pub fn model_content(&self) -> String {
     let content = match *self {
+      Self::Bash(ref output) => {
+        let stdout = String::from_utf8_lossy(output.stdout());
+        let stderr = String::from_utf8_lossy(output.stderr());
+        serde_json::json!({
+          "exit_code": output.exit_code(),
+          "timed_out": output.timed_out(),
+          "stdout": stdout,
+          "stderr": stderr,
+          "stdout_truncated": output.stdout_truncated(),
+          "stderr_truncated": output.stderr_truncated(),
+        })
+        .to_string()
+      }
       Self::ReadFile(ref output) => {
         let contents = String::from_utf8_lossy(output.contents());
         serde_json::json!({
@@ -104,18 +132,20 @@ impl ToolOutput {
 
 #[derive(Debug)]
 pub enum ToolOutput {
+  Bash(BashOutput),
   ReadFile(ReadFileOutput),
   Failure,
 }
 
 #[derive(Debug)]
 pub enum ToolExecutionError {
+  Bash(BashError),
   ReadFile(ReadFileError),
 }
 
 #[cfg(test)]
 mod tests {
-  use super::ToolOutput;
+  use super::{BashOutput, ToolOutput};
 
   #[test]
   fn renders_a_safe_failure_for_the_model() -> () {
@@ -124,6 +154,25 @@ mod tests {
     assert_eq!(
       output.model_content(),
       r#"{"error":"The requested tool operation could not be completed."}"#
+    );
+
+    return;
+  }
+
+  #[test]
+  fn renders_bash_output_for_the_model() -> () {
+    let output = ToolOutput::Bash(BashOutput::new(
+      Some(0),
+      false,
+      b"passed".to_vec(),
+      Vec::new(),
+      false,
+      false,
+    ));
+
+    assert_eq!(
+      output.model_content(),
+      r#"{"exit_code":0,"stderr":"","stderr_truncated":false,"stdout":"passed","stdout_truncated":false,"timed_out":false}"#
     );
 
     return;

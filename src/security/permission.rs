@@ -2,7 +2,7 @@ use crate::agent::PermissionMode;
 use crate::security::Capability;
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PermissionManager;
 
 impl PermissionManager {
@@ -22,6 +22,13 @@ impl PermissionManager {
       PermissionMode::WorkspaceWrite => matches!(
         capability,
         Capability::ReadFile | Capability::SearchFiles | Capability::WriteFile
+      ),
+      PermissionMode::ExpandedAccess => matches!(
+        capability,
+        Capability::ReadFile
+          | Capability::SearchFiles
+          | Capability::WriteFile
+          | Capability::ExecuteProcess
       ),
     };
 
@@ -140,6 +147,19 @@ mod tests {
 
     assert_eq!(error.permission_mode(), PermissionMode::WorkspaceWrite);
     assert_eq!(error.capability(), Capability::ExecuteProcess);
+
+    return;
+  }
+
+  #[test]
+  fn allows_process_execution_in_expanded_access_mode() -> () {
+    let manager = PermissionManager::new();
+
+    assert!(
+      manager
+        .authorize(PermissionMode::ExpandedAccess, Capability::ExecuteProcess)
+        .is_ok()
+    );
 
     return;
   }

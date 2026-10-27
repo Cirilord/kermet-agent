@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter};
 pub enum PermissionMode {
   ReadOnly,
   WorkspaceWrite,
+  ExpandedAccess,
 }
 
 impl Display for PermissionMode {
@@ -12,6 +13,7 @@ impl Display for PermissionMode {
     let value = match *self {
       Self::ReadOnly => "read-only",
       Self::WorkspaceWrite => "workspace-write",
+      Self::ExpandedAccess => "expanded-access",
     };
 
     return formatter.write_str(value);

@@ -1,6 +1,8 @@
+mod bash;
 mod read_file;
 mod registry;
 
+pub use bash::{Bash, BashError, BashOutput, BashRequest, BashRequestError};
 pub use read_file::{
   ReadFile, ReadFileError, ReadFileOutput, ReadFileRequest, ReadFileRequestError,
 };

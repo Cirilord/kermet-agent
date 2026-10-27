@@ -22,11 +22,15 @@ Only deterministic policy code can authorize an action. An LLM may request a too
 | --- | --- |
 | Read-only | Read and search files within the workspace; no writes, process execution, network access, or external integrations. |
 | Workspace-write | Read and write within the workspace, subject to path validation; process execution remains separately authorized. |
-| Expanded access | A narrowly scoped, explicitly approved capability outside the default boundary, such as a command, network request, external service, or path outside the workspace. |
+| Expanded access | A narrowly scoped, explicitly approved capability outside the default boundary, such as process execution, a network request, external service, or a path outside the workspace. |
 
 Permissions are evaluated for every tool call. Approval is specific to a capability and scope; it must not become implicit permission for unrelated actions.
 
-`PermissionManager` applies this table deterministically. Process execution is denied in every initial permission mode until a separately authorized execution boundary exists.
+`PermissionManager` applies this table deterministically. Process execution is denied in `read-only` and `workspace-write`; it requires explicit `expanded-access`.
+
+### Temporary Bash execution boundary
+
+The initial `bash` tool has no OS process sandbox. It is available only with `expanded-access`, starts with the workspace as its working directory, accepts no standard input, clears its environment except for `PATH`, times out after 30 seconds, and bounds each output stream to 32 KiB. Those controls do not restrict filesystem access, child processes, or network access. The local Hub currently creates turns with `expanded-access` for testing; it must return to a restricted mode or gain a per-turn permission control when the shared sandbox boundary is introduced.
 
 ## Tool requirements
 
@@ -34,7 +38,7 @@ Permissions are evaluated for every tool call. Approval is specific to a capabil
 - Canonicalize paths and reject paths that escape the approved workspace, including through symlinks.
 - Pass commands as an executable plus argument list; do not invoke a shell for ordinary command execution.
 - Set an approved working directory, timeout, output limit, environment allowlist, and resource limits for every process.
-- Disable network access by default.
+- Disable network access by default. The temporary Bash tool is an explicit exception under `expanded-access` until sandbox enforcement is implemented.
 - Record file mutations as an attributable diff and make write operations atomic when possible.
 - Treat all tool results as untrusted data before they enter model context or persistent memory.
 

@@ -148,6 +148,7 @@ pub enum Command {
 pub enum CliPermissionMode {
   ReadOnly,
   WorkspaceWrite,
+  ExpandedAccess,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -183,6 +184,7 @@ impl From<CliPermissionMode> for PermissionMode {
     let permission_mode = match mode {
       CliPermissionMode::ReadOnly => Self::ReadOnly,
       CliPermissionMode::WorkspaceWrite => Self::WorkspaceWrite,
+      CliPermissionMode::ExpandedAccess => Self::ExpandedAccess,
     };
 
     return permission_mode;

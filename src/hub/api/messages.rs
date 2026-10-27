@@ -88,8 +88,7 @@ fn start_turn(state: HubState, thread: crate::thread::Thread, message: String) -
         return;
       }
     };
-    let request = match TaskRequest::new(message, workspace, crate::agent::PermissionMode::ReadOnly)
-    {
+    let request = match TaskRequest::new(message, workspace, permission_mode()) {
       Ok(request) => request,
       Err(_) => {
         state_for_turn.publish(&thread_id, "failed", "request".to_owned());
@@ -136,6 +135,10 @@ fn start_turn(state: HubState, thread: crate::thread::Thread, message: String) -
   return;
 }
 
+fn permission_mode() -> crate::agent::PermissionMode {
+  return crate::agent::PermissionMode::ExpandedAccess;
+}
+
 fn open_workspace(path: PathBuf) -> Result<Workspace, ()> {
   let metadata = match std::fs::metadata(&path) {
     Ok(metadata) => metadata,
@@ -149,4 +152,17 @@ fn open_workspace(path: PathBuf) -> Result<Workspace, ()> {
     Err(_) => return Err(()),
   };
   return Ok(Workspace::new(path.clone(), path.join(".git").exists()));
+}
+
+#[cfg(test)]
+mod tests {
+  use super::permission_mode;
+  use crate::agent::PermissionMode;
+
+  #[test]
+  fn enables_expanded_access_for_hub_turns() -> () {
+    assert_eq!(permission_mode(), PermissionMode::ExpandedAccess);
+
+    return;
+  }
 }

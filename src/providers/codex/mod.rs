@@ -4,7 +4,7 @@ use crate::{
   models::{
     ModelEvent, ModelProvider, ModelProviderError, ModelRequest, ModelResponse, ModelToolCall,
   },
-  tools::{ReadFileRequest, ToolRequest},
+  tools::{BashRequest, ReadFileRequest, ToolRequest},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
@@ -48,7 +48,7 @@ impl CodexProvider {
         };
         vec![
           json!({"role":"user","content":request.task()}),
-          json!({"type":"function_call","call_id":call.id(),"name":"read_file","arguments":call.arguments()}),
+          json!({"type":"function_call","call_id":call.id(),"name":call.tool_name().function_name(),"arguments":call.arguments()}),
           json!({"type":"function_call_output","call_id":call.id(),"output":output.model_content()}),
         ]
       }
@@ -61,7 +61,10 @@ impl CodexProvider {
       "instructions": "You are Kermet, a coding agent. Use only the provided tools when needed.",
       "store": false, "stream": true, "tool_choice": "auto", "parallel_tool_calls": false,
       "reasoning": {"effort": selection.reasoning_effort().identifier()},
-      "tools": [{"type":"function","name":"read_file","description":"Read a file within the workspace.","parameters":{"type":"object","properties":{"path":{"type":"string"},"start_line":{"type":"integer","minimum":1},"end_line":{"type":"integer","minimum":1}},"required":["path"],"additionalProperties":false}}],
+      "tools": [
+        {"type":"function","name":"read_file","description":"Read a file within the workspace.","parameters":{"type":"object","properties":{"path":{"type":"string"},"start_line":{"type":"integer","minimum":1},"end_line":{"type":"integer","minimum":1}},"required":["path"],"additionalProperties":false}},
+        {"type":"function","name":"bash","description":"Run a Bash command in the workspace. This requires expanded access.","parameters":{"type":"object","properties":{"command":{"type":"string","minLength":1,"maxLength":16384}},"required":["command"],"additionalProperties":false}}
+      ],
     });
   }
 
@@ -230,20 +233,24 @@ fn parse_output(output: &[Value]) -> Result<ModelResponse, ModelProviderError> {
         Some(id) => id.to_owned(),
         None => return Err(ModelProviderError::InvalidResponse),
       };
-      if item.get("name").and_then(Value::as_str) != Some("read_file") {
-        return Err(ModelProviderError::UnsupportedToolCall);
-      }
       let arguments = match item.get("arguments").and_then(Value::as_str) {
         Some(arguments) => arguments,
         None => return Err(ModelProviderError::InvalidResponse),
       };
-      let request = match parse_read_file_request(arguments) {
-        Ok(request) => request,
-        Err(error) => return Err(error),
+      let request = match item.get("name").and_then(Value::as_str) {
+        Some("bash") => match parse_bash_request(arguments) {
+          Ok(request) => ToolRequest::Bash(request),
+          Err(error) => return Err(error),
+        },
+        Some("read_file") => match parse_read_file_request(arguments) {
+          Ok(request) => ToolRequest::ReadFile(request),
+          Err(error) => return Err(error),
+        },
+        _ => return Err(ModelProviderError::UnsupportedToolCall),
       };
       return Ok(ModelResponse::ToolCall(ModelToolCall::new(
         id,
-        ToolRequest::ReadFile(request),
+        request,
         arguments.to_owned(),
       )));
     }
@@ -312,6 +319,30 @@ fn parse_read_file_request(arguments: &str) -> Result<ReadFileRequest, ModelProv
   return Ok(request);
 }
 
+fn parse_bash_request(arguments: &str) -> Result<BashRequest, ModelProviderError> {
+  let value = match serde_json::from_str::<Value>(arguments) {
+    Ok(value) => value,
+    Err(_) => return Err(ModelProviderError::InvalidResponse),
+  };
+  let object = match value.as_object() {
+    Some(object) => object,
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  if object.len() != 1 || !object.contains_key("command") {
+    return Err(ModelProviderError::InvalidResponse);
+  }
+  let command = match object.get("command").and_then(Value::as_str) {
+    Some(command) => command.to_owned(),
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  let request = match BashRequest::new(command) {
+    Ok(request) => request,
+    Err(_) => return Err(ModelProviderError::InvalidResponse),
+  };
+
+  return Ok(request);
+}
+
 fn parse_line_number(value: &Value) -> Result<usize, ModelProviderError> {
   let line = match value.as_u64() {
     Some(line) => line,
@@ -366,12 +397,38 @@ mod tests {
       panic!("the response should request a tool");
     };
     let (id, request, preserved_arguments) = call.into_parts();
-    let ToolRequest::ReadFile(request) = request;
+    let ToolRequest::ReadFile(request) = request else {
+      panic!("the request should target read_file");
+    };
 
     assert_eq!(id, "call_123");
     assert_eq!(preserved_arguments, arguments);
     assert_eq!(request.path().to_string_lossy(), "src/main.rs");
     assert_eq!(request.line_range(), Some((2, 4)));
+
+    return;
+  }
+
+  #[test]
+  fn parses_and_preserves_a_bash_call() -> () {
+    let arguments = r#"{"command":"cargo test"}"#;
+    let response = parse_sse(
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"bash","arguments":"{\"command\":\"cargo test\"}"}]}}
+"#,
+    )
+    .expect("the completed response should be valid");
+
+    let ModelResponse::ToolCall(call) = response else {
+      panic!("the response should request a tool");
+    };
+    let (id, request, preserved_arguments) = call.into_parts();
+    let ToolRequest::Bash(request) = request else {
+      panic!("the request should target Bash");
+    };
+
+    assert_eq!(id, "call_123");
+    assert_eq!(preserved_arguments, arguments);
+    assert_eq!(request.command(), "cargo test");
 
     return;
   }
@@ -392,6 +449,18 @@ mod tests {
   fn rejects_unrecognized_read_file_arguments() -> () {
     let response = parse_sse(
       r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read_file","arguments":"{\"path\":\"src/main.rs\",\"encoding\":\"utf-8\"}"}]}}
+"#,
+    );
+
+    assert!(response.is_err());
+
+    return;
+  }
+
+  #[test]
+  fn rejects_unrecognized_bash_arguments() -> () {
+    let response = parse_sse(
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"bash","arguments":"{\"command\":\"pwd\",\"cwd\":\".\"}"}]}}
 "#,
     );
 
