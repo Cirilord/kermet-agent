@@ -46,6 +46,10 @@ The initial `bash` tool has no OS process sandbox. It is available only with `ex
 
 `write` creates or replaces an entire regular file. It cannot append, edit a range, create parent directories, or follow a path or parent symlink outside the workspace. It writes to a new sibling temporary file, syncs that file, and then renames it over the target. Its input content is limited to 256 KiB.
 
+### Edit tool
+
+`edit` changes exactly one text range in an existing UTF-8 regular file. It requires a non-empty `old_text` that occurs exactly once; missing or ambiguous text fails without modifying the file. It uses the same workspace and symlink validation and atomic temporary-file replacement pattern as `write`.
+
 ## Secrets and sensitive data
 
 - Do not include secrets, credentials, tokens, private keys, or unrestricted environment values in prompts, logs, events, or persisted memory.

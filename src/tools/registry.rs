@@ -2,13 +2,14 @@ use crate::{
   agent::TaskRequest,
   security::PermissionManager,
   tools::{
-    Bash, BashError, BashOutput, BashRequest, ReadFile, ReadFileError, ReadFileOutput,
-    ReadFileRequest, Write, WriteError, WriteOutput, WriteRequest,
+    Bash, BashError, BashOutput, BashRequest, Edit, EditError, EditOutput, EditRequest, ReadFile,
+    ReadFileError, ReadFileOutput, ReadFileRequest, Write, WriteError, WriteOutput, WriteRequest,
   },
 };
 
 pub struct ToolRegistry {
   bash: Bash,
+  edit: Edit,
   read_file: ReadFile,
   write: Write,
 }
@@ -17,6 +18,7 @@ impl ToolRegistry {
   pub fn new(permission_manager: PermissionManager) -> Self {
     return Self {
       bash: Bash::new(permission_manager.clone()),
+      edit: Edit::new(permission_manager.clone()),
       read_file: ReadFile::new(permission_manager.clone()),
       write: Write::new(permission_manager),
     };
@@ -31,6 +33,10 @@ impl ToolRegistry {
       ToolRequest::Bash(request) => match self.bash.execute(task, request) {
         Ok(output) => ToolOutput::Bash(output),
         Err(error) => return Err(ToolExecutionError::Bash(error)),
+      },
+      ToolRequest::Edit(request) => match self.edit.execute(task, request) {
+        Ok(output) => ToolOutput::Edit(output),
+        Err(error) => return Err(ToolExecutionError::Edit(error)),
       },
       ToolRequest::ReadFile(request) => match self.read_file.execute(task, request) {
         Ok(output) => ToolOutput::ReadFile(output),
@@ -49,6 +55,7 @@ impl ToolRegistry {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ToolName {
   Bash,
+  Edit,
   ReadFile,
   Write,
 }
@@ -57,6 +64,7 @@ impl ToolName {
   pub fn function_name(&self) -> &'static str {
     let function_name = match *self {
       Self::Bash => "bash",
+      Self::Edit => "edit",
       Self::ReadFile => "read_file",
       Self::Write => "write",
     };
@@ -67,6 +75,7 @@ impl ToolName {
   pub fn identifier(&self) -> &'static str {
     let identifier = match *self {
       Self::Bash => "bash",
+      Self::Edit => "edit",
       Self::ReadFile => "read-file",
       Self::Write => "write-file",
     };
@@ -78,6 +87,7 @@ impl ToolName {
 #[derive(Clone, Debug)]
 pub enum ToolRequest {
   Bash(BashRequest),
+  Edit(EditRequest),
   ReadFile(ReadFileRequest),
   Write(WriteRequest),
 }
@@ -86,6 +96,7 @@ impl ToolRequest {
   pub fn name(&self) -> ToolName {
     let name = match *self {
       Self::Bash(_) => ToolName::Bash,
+      Self::Edit(_) => ToolName::Edit,
       Self::ReadFile(_) => ToolName::ReadFile,
       Self::Write(_) => ToolName::Write,
     };
@@ -96,6 +107,7 @@ impl ToolRequest {
   pub fn target(&self) -> String {
     let target = match *self {
       Self::Bash(ref request) => request.command().to_owned(),
+      Self::Edit(ref request) => request.path().display().to_string(),
       Self::ReadFile(ref request) => request.path().display().to_string(),
       Self::Write(ref request) => request.path().display().to_string(),
     };
@@ -124,6 +136,11 @@ impl ToolOutput {
         })
         .to_string()
       }
+      Self::Edit(ref output) => serde_json::json!({
+        "path": output.path().display().to_string(),
+        "bytes_written": output.bytes_written(),
+      })
+      .to_string(),
       Self::ReadFile(ref output) => {
         let contents = String::from_utf8_lossy(output.contents());
         serde_json::json!({
@@ -150,6 +167,7 @@ impl ToolOutput {
 #[derive(Debug)]
 pub enum ToolOutput {
   Bash(BashOutput),
+  Edit(EditOutput),
   ReadFile(ReadFileOutput),
   Write(WriteOutput),
   Failure,
@@ -158,13 +176,21 @@ pub enum ToolOutput {
 #[derive(Debug)]
 pub enum ToolExecutionError {
   Bash(BashError),
+  Edit(EditError),
   ReadFile(ReadFileError),
   Write(WriteError),
 }
 
 #[cfg(test)]
 mod tests {
-  use super::{BashOutput, ToolOutput};
+  use super::{BashOutput, ToolName, ToolOutput};
+
+  #[test]
+  fn exposes_a_stable_edit_identifier() -> () {
+    assert_eq!(ToolName::Edit.identifier(), "edit");
+
+    return;
+  }
 
   #[test]
   fn renders_a_safe_failure_for_the_model() -> () {

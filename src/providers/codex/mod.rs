@@ -4,7 +4,7 @@ use crate::{
   models::{
     ModelEvent, ModelProvider, ModelProviderError, ModelRequest, ModelResponse, ModelToolCall,
   },
-  tools::{BashRequest, ReadFileRequest, ToolRequest, WriteRequest},
+  tools::{BashRequest, EditRequest, ReadFileRequest, ToolRequest, WriteRequest},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
@@ -64,6 +64,7 @@ impl CodexProvider {
       "tools": [
         {"type":"function","name":"read_file","description":"Read a file within the workspace.","parameters":{"type":"object","properties":{"path":{"type":"string"},"start_line":{"type":"integer","minimum":1},"end_line":{"type":"integer","minimum":1}},"required":["path"],"additionalProperties":false}},
         {"type":"function","name":"write","description":"Create or atomically replace a complete file within the workspace. This requires workspace-write or expanded access.","parameters":{"type":"object","properties":{"path":{"type":"string","minLength":1},"content":{"type":"string","maxLength":262144}},"required":["path","content"],"additionalProperties":false}},
+        {"type":"function","name":"edit","description":"Atomically replace one exact text occurrence in an existing workspace file. The old_text must occur exactly once. This requires workspace-write or expanded access.","parameters":{"type":"object","properties":{"path":{"type":"string","minLength":1},"old_text":{"type":"string","minLength":1,"maxLength":262144},"new_text":{"type":"string","maxLength":262144}},"required":["path","old_text","new_text"],"additionalProperties":false}},
         {"type":"function","name":"bash","description":"Run a Bash command in the workspace. This requires expanded access.","parameters":{"type":"object","properties":{"command":{"type":"string","minLength":1,"maxLength":16384}},"required":["command"],"additionalProperties":false}}
       ],
     });
@@ -243,6 +244,10 @@ fn parse_output(output: &[Value]) -> Result<ModelResponse, ModelProviderError> {
           Ok(request) => ToolRequest::Bash(request),
           Err(error) => return Err(error),
         },
+        Some("edit") => match parse_edit_request(arguments) {
+          Ok(request) => ToolRequest::Edit(request),
+          Err(error) => return Err(error),
+        },
         Some("read_file") => match parse_read_file_request(arguments) {
           Ok(request) => ToolRequest::ReadFile(request),
           Err(error) => return Err(error),
@@ -341,6 +346,42 @@ fn parse_bash_request(arguments: &str) -> Result<BashRequest, ModelProviderError
     None => return Err(ModelProviderError::InvalidResponse),
   };
   let request = match BashRequest::new(command) {
+    Ok(request) => request,
+    Err(_) => return Err(ModelProviderError::InvalidResponse),
+  };
+
+  return Ok(request);
+}
+
+fn parse_edit_request(arguments: &str) -> Result<EditRequest, ModelProviderError> {
+  let value = match serde_json::from_str::<Value>(arguments) {
+    Ok(value) => value,
+    Err(_) => return Err(ModelProviderError::InvalidResponse),
+  };
+  let object = match value.as_object() {
+    Some(object) => object,
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  if object.len() != 3
+    || !object.contains_key("path")
+    || !object.contains_key("old_text")
+    || !object.contains_key("new_text")
+  {
+    return Err(ModelProviderError::InvalidResponse);
+  }
+  let path = match object.get("path").and_then(Value::as_str) {
+    Some(path) => PathBuf::from(path),
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  let old_text = match object.get("old_text").and_then(Value::as_str) {
+    Some(old_text) => old_text.to_owned(),
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  let new_text = match object.get("new_text").and_then(Value::as_str) {
+    Some(new_text) => new_text.to_owned(),
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  let request = match EditRequest::new(path, old_text, new_text) {
     Ok(request) => request,
     Err(_) => return Err(ModelProviderError::InvalidResponse),
   };
@@ -492,6 +533,32 @@ mod tests {
   }
 
   #[test]
+  fn parses_and_preserves_an_edit_call() -> () {
+    let arguments = r#"{"path":"notes.txt","old_text":"old","new_text":"new"}"#;
+    let response = parse_sse(
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"edit","arguments":"{\"path\":\"notes.txt\",\"old_text\":\"old\",\"new_text\":\"new\"}"}]}}
+"#,
+    )
+    .expect("the completed response should be valid");
+
+    let ModelResponse::ToolCall(call) = response else {
+      panic!("the response should request a tool");
+    };
+    let (id, request, preserved_arguments) = call.into_parts();
+    let ToolRequest::Edit(request) = request else {
+      panic!("the request should target edit");
+    };
+
+    assert_eq!(id, "call_123");
+    assert_eq!(preserved_arguments, arguments);
+    assert_eq!(request.path().to_string_lossy(), "notes.txt");
+    assert_eq!(request.old_text(), "old");
+    assert_eq!(request.new_text(), "new");
+
+    return;
+  }
+
+  #[test]
   fn rejects_a_partial_line_range() -> () {
     let response = parse_sse(
       r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read_file","arguments":"{\"path\":\"src/main.rs\",\"start_line\":2}"}]}}
@@ -531,6 +598,18 @@ mod tests {
   fn rejects_unrecognized_write_arguments() -> () {
     let response = parse_sse(
       r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"write","arguments":"{\"path\":\"notes.txt\",\"content\":\"Kermet\",\"append\":true}"}]}}
+"#,
+    );
+
+    assert!(response.is_err());
+
+    return;
+  }
+
+  #[test]
+  fn rejects_unrecognized_edit_arguments() -> () {
+    let response = parse_sse(
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"edit","arguments":"{\"path\":\"notes.txt\",\"old_text\":\"old\",\"new_text\":\"new\",\"replace_all\":true}"}]}}
 "#,
     );
 

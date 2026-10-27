@@ -1,9 +1,11 @@
 mod bash;
+mod edit;
 mod read_file;
 mod registry;
 mod write;
 
 pub use bash::{Bash, BashError, BashOutput, BashRequest, BashRequestError};
+pub use edit::{Edit, EditError, EditOutput, EditRequest, EditRequestError};
 pub use read_file::{
   ReadFile, ReadFileError, ReadFileOutput, ReadFileRequest, ReadFileRequestError,
 };
