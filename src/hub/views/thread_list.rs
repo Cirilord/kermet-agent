@@ -31,7 +31,7 @@ pub fn thread_list_page(threads: &[Thread]) -> Markup {
       }
     }
   };
-  let page = layouts::page("Threads", Some("Threads"), content);
+  let page = layouts::thread_page("Threads", content, threads, None);
 
   return page;
 }

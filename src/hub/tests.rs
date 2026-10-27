@@ -12,7 +12,7 @@ fn renders_thread_content_as_escaped_html() -> () {
     "default".to_owned(),
   );
   thread.record_user_message("<script>unsafe()</script>".to_owned());
-  let page = views::thread_detail_page(&thread, "csrf-token").into_string();
+  let page = views::thread_detail_page(&thread, &[], "csrf-token").into_string();
 
   assert!(page.contains("&lt;script&gt;unsafe()&lt;/script&gt;"));
   assert!(!page.contains("<script>unsafe()</script>"));
@@ -43,10 +43,11 @@ fn renders_the_new_thread_chat() -> () {
     "workspace-0123456789abcdef".to_owned(),
     PathBuf::from("/workspace"),
   )];
-  let page = views::new_thread_page(&workspaces, "csrf-token").into_string();
+  let page = views::new_thread_page(&workspaces, &[], "csrf-token").into_string();
 
   assert!(page.contains(">Start a new thread</h1>"));
   assert!(page.contains("id=\"thread-message\""));
+  assert!(page.contains("type=\"text\""));
   assert!(page.contains("autofocus"));
   assert!(page.contains("disabled"));
   assert!(page.contains("id=\"workspace-trigger\""));
@@ -68,7 +69,7 @@ fn renders_the_application_sidebar() -> () {
     "default".to_owned(),
   );
   thread.record_user_message("Hello".to_owned());
-  let page = views::thread_detail_page(&thread, "csrf-token").into_string();
+  let page = views::thread_detail_page(&thread, &[], "csrf-token").into_string();
 
   assert!(page.contains("id=\"hub-sidebar\""));
   assert!(page.contains("md:sticky"));
@@ -78,11 +79,34 @@ fn renders_the_application_sidebar() -> () {
   assert!(page.contains("data-lucide=\"panel-left\""));
   assert!(page.contains("sticky top-0 z-30"));
   assert!(page.contains("data-lucide=\"messages-square\""));
-  assert!(page.contains("href=\"/threads\""));
+  assert!(page.contains("href=\"/threads/new\""));
   assert!(page.contains(">Threads</span>"));
   assert!(!page.contains("id=\"threads-menu\""));
   assert!(!page.contains("id=\"threads-toggle\""));
   assert!(page.contains(HUB_JAVASCRIPT));
+
+  return;
+}
+
+#[test]
+fn renders_saved_threads_in_the_secondary_sidebar() -> () {
+  let current_thread = Thread::new(
+    "thread-0123456789abcdef".to_owned(),
+    PathBuf::from("/workspace"),
+    "default".to_owned(),
+  );
+  let other_thread = Thread::new(
+    "thread-fedcba9876543210".to_owned(),
+    PathBuf::from("/workspace"),
+    "default".to_owned(),
+  );
+  let threads = vec![current_thread, other_thread];
+  let page = views::thread_detail_page(&threads[0], &threads, "csrf-token").into_string();
+
+  assert!(page.contains("aria-label=\"Saved threads\""));
+  assert!(page.contains("href=\"/threads/new\""));
+  assert!(page.contains("href=\"/threads/thread-0123456789abcdef\""));
+  assert!(page.contains("href=\"/threads/thread-fedcba9876543210\""));
 
   return;
 }

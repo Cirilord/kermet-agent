@@ -25,7 +25,7 @@ pub(crate) fn sidebar(threads_active: bool) -> Markup {
         div class="flex w-full min-w-0 flex-col p-2" {
           p class="sidebar-group-label flex h-8 items-center rounded-md px-2 text-xs font-medium text-muted-foreground" { "Platform" }
           nav aria-label="Platform" class="flex w-full min-w-0 flex-col" {
-            a class=(threads_class) href="/threads" {
+            a class=(threads_class) href="/threads/new" {
               i aria-hidden="true" class="size-4 shrink-0" data-lucide="messages-square" {}
               span class="sidebar-label truncate" { "Threads" }
             }

@@ -1,6 +1,7 @@
+use crate::thread::Thread;
 use maud::{DOCTYPE, Markup, html};
 
-use super::{sidebar, theme};
+use super::{sidebar, theme, thread_sidebar};
 
 pub(crate) const HUB_JAVASCRIPT: &str = include_str!("../assets/hub.js");
 const TAILWIND_URL: &str = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3";
@@ -8,6 +9,29 @@ const JQUERY_URL: &str = "https://code.jquery.com/jquery-4.0.0.min.js";
 const LUCIDE_URL: &str = "https://unpkg.com/lucide@1.61.0/dist/umd/lucide.min.js";
 
 pub(crate) fn page(title: &str, section: Option<&str>, content: Markup) -> Markup {
+  let page = render_page(title, section, content);
+
+  return page;
+}
+
+pub(crate) fn thread_page(
+  title: &str,
+  content: Markup,
+  threads: &[Thread],
+  current_thread_id: Option<&str>,
+) -> Markup {
+  let content = html! {
+    div class="-m-6 flex" {
+      (thread_sidebar(threads, current_thread_id))
+      div class="min-w-0 flex-1 p-6" { (content) }
+    }
+  };
+  let page = render_page(title, Some("Threads"), content);
+
+  return page;
+}
+
+fn render_page(title: &str, section: Option<&str>, content: Markup) -> Markup {
   let page = html! {
     (DOCTYPE)
     html class="dark bg-background" lang="en" {
@@ -25,7 +49,7 @@ pub(crate) fn page(title: &str, section: Option<&str>, content: Markup) -> Marku
         div class="hub-shell flex min-h-svh w-full" id="hub-shell" {
           (sidebar(section == Some("Threads")))
           div class="flex min-w-0 flex-1 flex-col bg-background" {
-            header class="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4" {
+            header class="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-2" {
               button aria-label="Toggle sidebar" class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" id="sidebar-toggle" type="button" {
                 i aria-hidden="true" class="size-4" data-lucide="panel-left" {}
               }

@@ -16,9 +16,9 @@ $(function () {
   const $workspaceId = $('#workspace-id');
   const $threadForm = $('#new-thread-form');
   const $threadMessage = $('#thread-message');
-  const $threadStatus = $('#thread-status');
   const $threadSubmit = $('#thread-submit');
   const $threadTranscript = $('#thread-transcript');
+  const $threadScrollBottom = $('#thread-scroll-bottom');
   let threadId = null;
   let eventSource = null;
   let assistantMessage = null;
@@ -46,6 +46,28 @@ $(function () {
     $workspaceDialog.addClass('hidden');
     $workspaceDialogBackdrop.addClass('hidden').attr('aria-hidden', 'true');
     $workspaceTrigger.trigger('focus');
+  }
+
+  function updateThreadScrollButton() {
+    if (threadId === null || !$threadTranscript.length) {
+      $threadScrollBottom.addClass('hidden');
+      return;
+    }
+
+    const distanceToBottom = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
+
+    $threadScrollBottom.toggleClass('hidden', distanceToBottom <= 24);
+  }
+
+  function scrollThreadToBottom(behavior) {
+    if (!$threadTranscript.length) {
+      return;
+    }
+
+    window.requestAnimationFrame(function () {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: behavior });
+      updateThreadScrollButton();
+    });
   }
 
   async function chooseWorkspaceFolder() {
@@ -94,21 +116,30 @@ $(function () {
 
     $message.append($content);
     $threadTranscript.removeClass('hidden').append($message);
+    scrollThreadToBottom();
 
     return $content;
   }
 
-  function setTurnPending(status) {
-    $threadSubmit.prop('disabled', true);
-    $threadMessage.prop('disabled', true);
-    $threadStatus.text(status);
+  function appendTurnEvent(message) {
+    const $event = $('<p>')
+      .addClass('self-center text-xs text-muted-foreground')
+      .attr('role', 'status')
+      .text(message);
+
+    $threadTranscript.removeClass('hidden').append($event);
+    scrollThreadToBottom();
   }
 
-  function finishTurn(status) {
+  function setTurnPending() {
+    $threadSubmit.prop('disabled', true);
+    $threadMessage.prop('disabled', true);
+  }
+
+  function finishTurn() {
     assistantMessage = null;
     $threadSubmit.prop('disabled', false);
     $threadMessage.prop('disabled', false).trigger('focus');
-    $threadStatus.text(status);
   }
 
   async function startInitialTurn() {
@@ -120,26 +151,30 @@ $(function () {
       });
 
       if (!response.ok) {
-        finishTurn('Kermet could not start the thread.');
+        appendTurnEvent('Kermet could not start the thread.');
+        finishTurn();
       }
     } catch (_) {
-      finishTurn('Kermet could not start the thread.');
+      appendTurnEvent('Kermet could not start the thread.');
+      finishTurn();
     }
   }
 
   function connectThreadEvents(id, onConnected) {
     eventSource = new EventSource(`/api/threads/${id}/events`);
     eventSource.addEventListener('connected', function () {
-      onConnected();
+      if (onConnected !== null) {
+        onConnected();
+      }
     }, { once: true });
     eventSource.addEventListener('thinking', function () {
-      $threadStatus.text('Thinking…');
+      appendTurnEvent('Thinking…');
     });
     eventSource.addEventListener('tool_call', function (event) {
-      $threadStatus.text(`Calling ${event.data}`);
+      appendTurnEvent(`Calling ${event.data}`);
     });
     eventSource.addEventListener('tool_execution', function (event) {
-      $threadStatus.text(`Running ${event.data}`);
+      appendTurnEvent(`Running ${event.data}`);
     });
     eventSource.addEventListener('text_delta', function (event) {
       if (assistantMessage === null) {
@@ -147,12 +182,14 @@ $(function () {
       }
 
       assistantMessage.text(`${assistantMessage.text()}${event.data}`);
+      scrollThreadToBottom();
     });
     eventSource.addEventListener('completed', function () {
-      finishTurn('Ready for your next message.');
+      finishTurn();
     });
     eventSource.addEventListener('failed', function () {
-      finishTurn('Kermet could not complete this turn.');
+      appendTurnEvent('Kermet could not complete this turn.');
+      finishTurn();
     });
   }
 
@@ -164,14 +201,14 @@ $(function () {
     }
 
     threadId = existingThreadId;
-    connectThreadEvents(threadId, function () {
-      $threadStatus.text('Ready for your next message.');
-    });
+    connectThreadEvents(threadId, null);
+    scrollThreadToBottom();
   }
 
   async function sendMessage(message) {
-    setTurnPending('Sending message…');
+    setTurnPending();
     appendMessage('user', message);
+    appendTurnEvent('Sending message…');
     $threadMessage.val('');
 
     try {
@@ -183,10 +220,12 @@ $(function () {
       });
 
       if (!response.ok) {
-        finishTurn('Kermet could not send the message.');
+        appendTurnEvent('Kermet could not send the message.');
+        finishTurn();
       }
     } catch (_) {
-      finishTurn('Kermet could not send the message.');
+      appendTurnEvent('Kermet could not send the message.');
+      finishTurn();
     }
   }
 
@@ -219,13 +258,16 @@ $(function () {
   $('#workspace-dialog-cancel, #workspace-dialog-backdrop').on('click', closeWorkspaceDialog);
   $workspacePickerTrigger.on('click', chooseWorkspaceFolder);
   connectExistingThread();
+  $threadScrollBottom.on('click', function () {
+    scrollThreadToBottom('smooth');
+  });
+  $(window).on('scroll resize', updateThreadScrollButton);
   $threadForm.on('submit', async function (event) {
     event.preventDefault();
     const workspaceId = $workspaceId.val();
     const message = $threadMessage.val().trim();
 
     if (!message) {
-      $threadStatus.text('Enter a message.');
       return;
     }
 
@@ -235,12 +277,10 @@ $(function () {
     }
 
     if (!workspaceId) {
-      $threadStatus.text('Select a workspace and enter a message.');
       return;
     }
 
-    setTurnPending('Creating thread…');
-    $threadStatus.text('Creating thread…');
+    setTurnPending();
 
     try {
       const response = await window.fetch('/api/threads', {
@@ -250,19 +290,22 @@ $(function () {
         body: JSON.stringify({ workspace_id: workspaceId, message: message }),
       });
       if (!response.ok) {
-        finishTurn('Kermet could not create the thread.');
+        appendTurnEvent('Kermet could not create the thread.');
+        finishTurn();
         return;
       }
       const thread = await response.json();
       threadId = thread.id;
       window.history.replaceState(null, '', `/threads/${thread.id}`);
       appendMessage('user', message);
+      appendTurnEvent('Starting thread…');
       $threadMessage.val('');
       connectThreadEvents(thread.id, function () {
         startInitialTurn();
       });
     } catch (_) {
-      finishTurn('Kermet could not create the thread.');
+      appendTurnEvent('Kermet could not create the thread.');
+      finishTurn();
     }
   });
 

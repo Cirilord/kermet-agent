@@ -1,9 +1,13 @@
-use crate::workspace::WorkspaceRecord;
+use crate::{thread::Thread, workspace::WorkspaceRecord};
 use maud::{Markup, html};
 
 use super::super::layouts;
 
-pub fn new_thread_page(workspaces: &[WorkspaceRecord], csrf_token: &str) -> Markup {
+pub fn new_thread_page(
+  workspaces: &[WorkspaceRecord],
+  threads: &[Thread],
+  csrf_token: &str,
+) -> Markup {
   let content = html! {
     div class="flex min-h-[calc(100svh-4rem-3rem)] w-full flex-col" {
       div class="mx-auto flex w-full max-w-3xl flex-1 flex-col py-8 sm:py-12" {
@@ -43,12 +47,14 @@ pub fn new_thread_page(workspaces: &[WorkspaceRecord], csrf_token: &str) -> Mark
         }
         input id="workspace-id" type="hidden" {}
         div class="mb-3 hidden flex flex-1 flex-col gap-3" id="thread-transcript" aria-live="polite" {}
-        form class="rounded-xl border border-border bg-card p-3 shadow-sm" id="new-thread-form" {
+        form class="relative rounded-xl border border-border bg-card p-2 shadow-sm" id="new-thread-form" {
+          button aria-label="Scroll to latest message" class="absolute bottom-full left-1/2 z-30 mb-3 hidden inline-flex size-9 -translate-x-1/2 items-center justify-center rounded-md border border-border bg-card text-card-foreground shadow-sm hover:bg-accent hover:text-accent-foreground" id="thread-scroll-bottom" type="button" {
+            i aria-hidden="true" class="size-4" data-lucide="arrow-down" {}
+          }
           label class="sr-only" for="thread-message" { "Message" }
-          textarea autofocus class="flex min-h-24 w-full resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-muted-foreground" id="thread-message" name="message" placeholder="Ask Kermet anything..." {}
-          div class="flex items-center justify-between border-t border-border pt-3" {
-            span class="text-xs text-muted-foreground" id="thread-status" { "Select a workspace to start." }
-            button aria-label="Send message" class="inline-flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground" id="thread-submit" type="submit" {
+          div class="flex items-center gap-2" {
+            input autofocus autocomplete="off" class="flex h-9 min-w-0 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground" id="thread-message" name="message" placeholder="Ask Kermet anything..." type="text" {}
+            button aria-label="Send message" class="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground" id="thread-submit" type="submit" {
               i aria-hidden="true" class="size-4" data-lucide="arrow-up" {}
             }
           }
@@ -73,7 +79,7 @@ pub fn new_thread_page(workspaces: &[WorkspaceRecord], csrf_token: &str) -> Mark
       }
     }
   };
-  let page = layouts::page("New thread", Some("Threads"), content);
+  let page = layouts::thread_page("New thread", content, threads, None);
 
   return page;
 }
