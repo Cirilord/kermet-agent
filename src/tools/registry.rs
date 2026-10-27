@@ -77,7 +77,7 @@ impl ToolName {
       Self::Bash => "bash",
       Self::Edit => "edit",
       Self::Read => "read",
-      Self::Write => "write-file",
+      Self::Write => "write",
     };
 
     return identifier;
@@ -188,6 +188,13 @@ mod tests {
   #[test]
   fn exposes_a_stable_read_identifier() -> () {
     assert_eq!(ToolName::Read.identifier(), "read");
+
+    return;
+  }
+
+  #[test]
+  fn exposes_a_stable_write_identifier() -> () {
+    assert_eq!(ToolName::Write.identifier(), "write");
 
     return;
   }
