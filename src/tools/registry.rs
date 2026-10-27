@@ -2,15 +2,15 @@ use crate::{
   agent::TaskRequest,
   security::PermissionManager,
   tools::{
-    Bash, BashError, BashOutput, BashRequest, Edit, EditError, EditOutput, EditRequest, ReadFile,
-    ReadFileError, ReadFileOutput, ReadFileRequest, Write, WriteError, WriteOutput, WriteRequest,
+    Bash, BashError, BashOutput, BashRequest, Edit, EditError, EditOutput, EditRequest, Read,
+    ReadError, ReadOutput, ReadRequest, Write, WriteError, WriteOutput, WriteRequest,
   },
 };
 
 pub struct ToolRegistry {
   bash: Bash,
   edit: Edit,
-  read_file: ReadFile,
+  read: Read,
   write: Write,
 }
 
@@ -19,7 +19,7 @@ impl ToolRegistry {
     return Self {
       bash: Bash::new(permission_manager.clone()),
       edit: Edit::new(permission_manager.clone()),
-      read_file: ReadFile::new(permission_manager.clone()),
+      read: Read::new(permission_manager.clone()),
       write: Write::new(permission_manager),
     };
   }
@@ -38,9 +38,9 @@ impl ToolRegistry {
         Ok(output) => ToolOutput::Edit(output),
         Err(error) => return Err(ToolExecutionError::Edit(error)),
       },
-      ToolRequest::ReadFile(request) => match self.read_file.execute(task, request) {
-        Ok(output) => ToolOutput::ReadFile(output),
-        Err(error) => return Err(ToolExecutionError::ReadFile(error)),
+      ToolRequest::Read(request) => match self.read.execute(task, request) {
+        Ok(output) => ToolOutput::Read(output),
+        Err(error) => return Err(ToolExecutionError::Read(error)),
       },
       ToolRequest::Write(request) => match self.write.execute(task, request) {
         Ok(output) => ToolOutput::Write(output),
@@ -56,7 +56,7 @@ impl ToolRegistry {
 pub enum ToolName {
   Bash,
   Edit,
-  ReadFile,
+  Read,
   Write,
 }
 
@@ -65,7 +65,7 @@ impl ToolName {
     let function_name = match *self {
       Self::Bash => "bash",
       Self::Edit => "edit",
-      Self::ReadFile => "read_file",
+      Self::Read => "read",
       Self::Write => "write",
     };
 
@@ -76,7 +76,7 @@ impl ToolName {
     let identifier = match *self {
       Self::Bash => "bash",
       Self::Edit => "edit",
-      Self::ReadFile => "read-file",
+      Self::Read => "read",
       Self::Write => "write-file",
     };
 
@@ -88,7 +88,7 @@ impl ToolName {
 pub enum ToolRequest {
   Bash(BashRequest),
   Edit(EditRequest),
-  ReadFile(ReadFileRequest),
+  Read(ReadRequest),
   Write(WriteRequest),
 }
 
@@ -97,7 +97,7 @@ impl ToolRequest {
     let name = match *self {
       Self::Bash(_) => ToolName::Bash,
       Self::Edit(_) => ToolName::Edit,
-      Self::ReadFile(_) => ToolName::ReadFile,
+      Self::Read(_) => ToolName::Read,
       Self::Write(_) => ToolName::Write,
     };
 
@@ -108,7 +108,7 @@ impl ToolRequest {
     let target = match *self {
       Self::Bash(ref request) => request.command().to_owned(),
       Self::Edit(ref request) => request.path().display().to_string(),
-      Self::ReadFile(ref request) => request.path().display().to_string(),
+      Self::Read(ref request) => request.path().display().to_string(),
       Self::Write(ref request) => request.path().display().to_string(),
     };
 
@@ -141,7 +141,7 @@ impl ToolOutput {
         "bytes_written": output.bytes_written(),
       })
       .to_string(),
-      Self::ReadFile(ref output) => {
+      Self::Read(ref output) => {
         let contents = String::from_utf8_lossy(output.contents());
         serde_json::json!({
           "path": output.path().display().to_string(),
@@ -168,7 +168,7 @@ impl ToolOutput {
 pub enum ToolOutput {
   Bash(BashOutput),
   Edit(EditOutput),
-  ReadFile(ReadFileOutput),
+  Read(ReadOutput),
   Write(WriteOutput),
   Failure,
 }
@@ -177,13 +177,20 @@ pub enum ToolOutput {
 pub enum ToolExecutionError {
   Bash(BashError),
   Edit(EditError),
-  ReadFile(ReadFileError),
+  Read(ReadError),
   Write(WriteError),
 }
 
 #[cfg(test)]
 mod tests {
   use super::{BashOutput, ToolName, ToolOutput};
+
+  #[test]
+  fn exposes_a_stable_read_identifier() -> () {
+    assert_eq!(ToolName::Read.identifier(), "read");
+
+    return;
+  }
 
   #[test]
   fn exposes_a_stable_edit_identifier() -> () {

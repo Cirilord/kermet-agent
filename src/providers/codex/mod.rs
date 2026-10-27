@@ -4,7 +4,7 @@ use crate::{
   models::{
     ModelEvent, ModelProvider, ModelProviderError, ModelRequest, ModelResponse, ModelToolCall,
   },
-  tools::{BashRequest, EditRequest, ReadFileRequest, ToolRequest, WriteRequest},
+  tools::{BashRequest, EditRequest, ReadRequest, ToolRequest, WriteRequest},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
@@ -62,7 +62,7 @@ impl CodexProvider {
       "store": false, "stream": true, "tool_choice": "auto", "parallel_tool_calls": false,
       "reasoning": {"effort": selection.reasoning_effort().identifier()},
       "tools": [
-        {"type":"function","name":"read_file","description":"Read a file within the workspace.","parameters":{"type":"object","properties":{"path":{"type":"string"},"start_line":{"type":"integer","minimum":1},"end_line":{"type":"integer","minimum":1}},"required":["path"],"additionalProperties":false}},
+        {"type":"function","name":"read","description":"Read a file within the workspace.","parameters":{"type":"object","properties":{"path":{"type":"string"},"start_line":{"type":"integer","minimum":1},"end_line":{"type":"integer","minimum":1}},"required":["path"],"additionalProperties":false}},
         {"type":"function","name":"write","description":"Create or atomically replace a complete file within the workspace. This requires workspace-write or expanded access.","parameters":{"type":"object","properties":{"path":{"type":"string","minLength":1},"content":{"type":"string","maxLength":262144}},"required":["path","content"],"additionalProperties":false}},
         {"type":"function","name":"edit","description":"Atomically replace one exact text occurrence in an existing workspace file. The old_text must occur exactly once. This requires workspace-write or expanded access.","parameters":{"type":"object","properties":{"path":{"type":"string","minLength":1},"old_text":{"type":"string","minLength":1,"maxLength":262144},"new_text":{"type":"string","maxLength":262144}},"required":["path","old_text","new_text"],"additionalProperties":false}},
         {"type":"function","name":"bash","description":"Run a Bash command in the workspace. This requires expanded access.","parameters":{"type":"object","properties":{"command":{"type":"string","minLength":1,"maxLength":16384}},"required":["command"],"additionalProperties":false}}
@@ -248,8 +248,8 @@ fn parse_output(output: &[Value]) -> Result<ModelResponse, ModelProviderError> {
           Ok(request) => ToolRequest::Edit(request),
           Err(error) => return Err(error),
         },
-        Some("read_file") => match parse_read_file_request(arguments) {
-          Ok(request) => ToolRequest::ReadFile(request),
+        Some("read") => match parse_read_request(arguments) {
+          Ok(request) => ToolRequest::Read(request),
           Err(error) => return Err(error),
         },
         Some("write") => match parse_write_request(arguments) {
@@ -284,7 +284,7 @@ fn parse_output(output: &[Value]) -> Result<ModelResponse, ModelProviderError> {
   return Ok(ModelResponse::Final(text));
 }
 
-fn parse_read_file_request(arguments: &str) -> Result<ReadFileRequest, ModelProviderError> {
+fn parse_read_request(arguments: &str) -> Result<ReadRequest, ModelProviderError> {
   let value = match serde_json::from_str::<Value>(arguments) {
     Ok(value) => value,
     Err(_) => return Err(ModelProviderError::InvalidResponse),
@@ -318,8 +318,8 @@ fn parse_read_file_request(arguments: &str) -> Result<ReadFileRequest, ModelProv
     None => None,
   };
   let request = match (start_line, end_line) {
-    (None, None) => ReadFileRequest::new(path),
-    (Some(start), Some(end)) => match ReadFileRequest::with_line_range(path, start, end) {
+    (None, None) => ReadRequest::new(path),
+    (Some(start), Some(end)) => match ReadRequest::with_line_range(path, start, end) {
       Ok(request) => request,
       Err(_) => return Err(ModelProviderError::InvalidResponse),
     },
@@ -459,10 +459,10 @@ mod tests {
   }
 
   #[test]
-  fn parses_and_preserves_a_read_file_call() -> () {
+  fn parses_and_preserves_a_read_call() -> () {
     let arguments = r#"{"path":"src/main.rs","start_line":2,"end_line":4}"#;
     let response = parse_sse(
-      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read_file","arguments":"{\"path\":\"src/main.rs\",\"start_line\":2,\"end_line\":4}"}]}}
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read","arguments":"{\"path\":\"src/main.rs\",\"start_line\":2,\"end_line\":4}"}]}}
 "#,
     )
     .expect("the completed response should be valid");
@@ -471,8 +471,8 @@ mod tests {
       panic!("the response should request a tool");
     };
     let (id, request, preserved_arguments) = call.into_parts();
-    let ToolRequest::ReadFile(request) = request else {
-      panic!("the request should target read_file");
+    let ToolRequest::Read(request) = request else {
+      panic!("the request should target read");
     };
 
     assert_eq!(id, "call_123");
@@ -561,7 +561,7 @@ mod tests {
   #[test]
   fn rejects_a_partial_line_range() -> () {
     let response = parse_sse(
-      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read_file","arguments":"{\"path\":\"src/main.rs\",\"start_line\":2}"}]}}
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read","arguments":"{\"path\":\"src/main.rs\",\"start_line\":2}"}]}}
 "#,
     );
 
@@ -571,9 +571,9 @@ mod tests {
   }
 
   #[test]
-  fn rejects_unrecognized_read_file_arguments() -> () {
+  fn rejects_unrecognized_read_arguments() -> () {
     let response = parse_sse(
-      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read_file","arguments":"{\"path\":\"src/main.rs\",\"encoding\":\"utf-8\"}"}]}}
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read","arguments":"{\"path\":\"src/main.rs\",\"encoding\":\"utf-8\"}"}]}}
 "#,
     );
 
