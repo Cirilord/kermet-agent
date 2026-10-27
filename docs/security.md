@@ -42,6 +42,10 @@ The initial `bash` tool has no OS process sandbox. It is available only with `ex
 - Record file mutations as an attributable diff and make write operations atomic when possible.
 - Treat all tool results as untrusted data before they enter model context or persistent memory.
 
+### Write tool
+
+`write` creates or replaces an entire regular file. It cannot append, edit a range, create parent directories, or follow a path or parent symlink outside the workspace. It writes to a new sibling temporary file, syncs that file, and then renames it over the target. Its input content is limited to 256 KiB.
+
 ## Secrets and sensitive data
 
 - Do not include secrets, credentials, tokens, private keys, or unrestricted environment values in prompts, logs, events, or persisted memory.

@@ -4,7 +4,7 @@ use crate::{
   models::{
     ModelEvent, ModelProvider, ModelProviderError, ModelRequest, ModelResponse, ModelToolCall,
   },
-  tools::{BashRequest, ReadFileRequest, ToolRequest},
+  tools::{BashRequest, ReadFileRequest, ToolRequest, WriteRequest},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
@@ -63,6 +63,7 @@ impl CodexProvider {
       "reasoning": {"effort": selection.reasoning_effort().identifier()},
       "tools": [
         {"type":"function","name":"read_file","description":"Read a file within the workspace.","parameters":{"type":"object","properties":{"path":{"type":"string"},"start_line":{"type":"integer","minimum":1},"end_line":{"type":"integer","minimum":1}},"required":["path"],"additionalProperties":false}},
+        {"type":"function","name":"write","description":"Create or atomically replace a complete file within the workspace. This requires workspace-write or expanded access.","parameters":{"type":"object","properties":{"path":{"type":"string","minLength":1},"content":{"type":"string","maxLength":262144}},"required":["path","content"],"additionalProperties":false}},
         {"type":"function","name":"bash","description":"Run a Bash command in the workspace. This requires expanded access.","parameters":{"type":"object","properties":{"command":{"type":"string","minLength":1,"maxLength":16384}},"required":["command"],"additionalProperties":false}}
       ],
     });
@@ -246,6 +247,10 @@ fn parse_output(output: &[Value]) -> Result<ModelResponse, ModelProviderError> {
           Ok(request) => ToolRequest::ReadFile(request),
           Err(error) => return Err(error),
         },
+        Some("write") => match parse_write_request(arguments) {
+          Ok(request) => ToolRequest::Write(request),
+          Err(error) => return Err(error),
+        },
         _ => return Err(ModelProviderError::UnsupportedToolCall),
       };
       return Ok(ModelResponse::ToolCall(ModelToolCall::new(
@@ -336,6 +341,34 @@ fn parse_bash_request(arguments: &str) -> Result<BashRequest, ModelProviderError
     None => return Err(ModelProviderError::InvalidResponse),
   };
   let request = match BashRequest::new(command) {
+    Ok(request) => request,
+    Err(_) => return Err(ModelProviderError::InvalidResponse),
+  };
+
+  return Ok(request);
+}
+
+fn parse_write_request(arguments: &str) -> Result<WriteRequest, ModelProviderError> {
+  let value = match serde_json::from_str::<Value>(arguments) {
+    Ok(value) => value,
+    Err(_) => return Err(ModelProviderError::InvalidResponse),
+  };
+  let object = match value.as_object() {
+    Some(object) => object,
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  if object.len() != 2 || !object.contains_key("path") || !object.contains_key("content") {
+    return Err(ModelProviderError::InvalidResponse);
+  }
+  let path = match object.get("path").and_then(Value::as_str) {
+    Some(path) => PathBuf::from(path),
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  let content = match object.get("content").and_then(Value::as_str) {
+    Some(content) => content.to_owned(),
+    None => return Err(ModelProviderError::InvalidResponse),
+  };
+  let request = match WriteRequest::new(path, content) {
     Ok(request) => request,
     Err(_) => return Err(ModelProviderError::InvalidResponse),
   };
@@ -434,6 +467,31 @@ mod tests {
   }
 
   #[test]
+  fn parses_and_preserves_a_write_call() -> () {
+    let arguments = r#"{"path":"notes.txt","content":"Kermet"}"#;
+    let response = parse_sse(
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"write","arguments":"{\"path\":\"notes.txt\",\"content\":\"Kermet\"}"}]}}
+"#,
+    )
+    .expect("the completed response should be valid");
+
+    let ModelResponse::ToolCall(call) = response else {
+      panic!("the response should request a tool");
+    };
+    let (id, request, preserved_arguments) = call.into_parts();
+    let ToolRequest::Write(request) = request else {
+      panic!("the request should target write");
+    };
+
+    assert_eq!(id, "call_123");
+    assert_eq!(preserved_arguments, arguments);
+    assert_eq!(request.path().to_string_lossy(), "notes.txt");
+    assert_eq!(request.contents(), "Kermet");
+
+    return;
+  }
+
+  #[test]
   fn rejects_a_partial_line_range() -> () {
     let response = parse_sse(
       r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"read_file","arguments":"{\"path\":\"src/main.rs\",\"start_line\":2}"}]}}
@@ -461,6 +519,18 @@ mod tests {
   fn rejects_unrecognized_bash_arguments() -> () {
     let response = parse_sse(
       r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"bash","arguments":"{\"command\":\"pwd\",\"cwd\":\".\"}"}]}}
+"#,
+    );
+
+    assert!(response.is_err());
+
+    return;
+  }
+
+  #[test]
+  fn rejects_unrecognized_write_arguments() -> () {
+    let response = parse_sse(
+      r#"data: {"type":"response.completed","response":{"output":[{"type":"function_call","call_id":"call_123","name":"write","arguments":"{\"path\":\"notes.txt\",\"content\":\"Kermet\",\"append\":true}"}]}}
 "#,
     );
 

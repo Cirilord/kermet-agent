@@ -141,6 +141,7 @@ fn render_agent_event(event: AgentEvent, streamed_text: &mut bool) -> () {
     AgentEvent::ToolExecution { tool_name, target } => match tool_name {
       crate::tools::ToolName::Bash => println!("Running Bash: {target}…"),
       crate::tools::ToolName::ReadFile => println!("Reading {target}…"),
+      crate::tools::ToolName::Write => println!("Writing {target}…"),
     },
   }
 

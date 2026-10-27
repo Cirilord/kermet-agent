@@ -3,20 +3,22 @@ use crate::{
   security::PermissionManager,
   tools::{
     Bash, BashError, BashOutput, BashRequest, ReadFile, ReadFileError, ReadFileOutput,
-    ReadFileRequest,
+    ReadFileRequest, Write, WriteError, WriteOutput, WriteRequest,
   },
 };
 
 pub struct ToolRegistry {
   bash: Bash,
   read_file: ReadFile,
+  write: Write,
 }
 
 impl ToolRegistry {
   pub fn new(permission_manager: PermissionManager) -> Self {
     return Self {
       bash: Bash::new(permission_manager.clone()),
-      read_file: ReadFile::new(permission_manager),
+      read_file: ReadFile::new(permission_manager.clone()),
+      write: Write::new(permission_manager),
     };
   }
 
@@ -34,6 +36,10 @@ impl ToolRegistry {
         Ok(output) => ToolOutput::ReadFile(output),
         Err(error) => return Err(ToolExecutionError::ReadFile(error)),
       },
+      ToolRequest::Write(request) => match self.write.execute(task, request) {
+        Ok(output) => ToolOutput::Write(output),
+        Err(error) => return Err(ToolExecutionError::Write(error)),
+      },
     };
 
     return Ok(output);
@@ -44,6 +50,7 @@ impl ToolRegistry {
 pub enum ToolName {
   Bash,
   ReadFile,
+  Write,
 }
 
 impl ToolName {
@@ -51,6 +58,7 @@ impl ToolName {
     let function_name = match *self {
       Self::Bash => "bash",
       Self::ReadFile => "read_file",
+      Self::Write => "write",
     };
 
     return function_name;
@@ -60,6 +68,7 @@ impl ToolName {
     let identifier = match *self {
       Self::Bash => "bash",
       Self::ReadFile => "read-file",
+      Self::Write => "write-file",
     };
 
     return identifier;
@@ -70,6 +79,7 @@ impl ToolName {
 pub enum ToolRequest {
   Bash(BashRequest),
   ReadFile(ReadFileRequest),
+  Write(WriteRequest),
 }
 
 impl ToolRequest {
@@ -77,6 +87,7 @@ impl ToolRequest {
     let name = match *self {
       Self::Bash(_) => ToolName::Bash,
       Self::ReadFile(_) => ToolName::ReadFile,
+      Self::Write(_) => ToolName::Write,
     };
 
     return name;
@@ -86,6 +97,7 @@ impl ToolRequest {
     let target = match *self {
       Self::Bash(ref request) => request.command().to_owned(),
       Self::ReadFile(ref request) => request.path().display().to_string(),
+      Self::Write(ref request) => request.path().display().to_string(),
     };
 
     return target;
@@ -120,6 +132,11 @@ impl ToolOutput {
         })
         .to_string()
       }
+      Self::Write(ref output) => serde_json::json!({
+        "path": output.path().display().to_string(),
+        "bytes_written": output.bytes_written(),
+      })
+      .to_string(),
       Self::Failure => serde_json::json!({
         "error": "The requested tool operation could not be completed.",
       })
@@ -134,6 +151,7 @@ impl ToolOutput {
 pub enum ToolOutput {
   Bash(BashOutput),
   ReadFile(ReadFileOutput),
+  Write(WriteOutput),
   Failure,
 }
 
@@ -141,6 +159,7 @@ pub enum ToolOutput {
 pub enum ToolExecutionError {
   Bash(BashError),
   ReadFile(ReadFileError),
+  Write(WriteError),
 }
 
 #[cfg(test)]
