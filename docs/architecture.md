@@ -40,7 +40,7 @@ Tools, permissions, validation, and providers must not be implicit dependencies 
 
 ## Model tool calls
 
-The model provider translates an accepted provider function call into a typed `ToolRequest`. The tool registry validates and executes that request locally. The agent loop then returns the original call identifier and arguments, together with the bounded tool output, to the provider so the model can continue the same task. A rejected or failed tool operation returns a generic failure result to the model; it does not expose internal errors or end the whole turn before the model can explain the outcome.
+The model provider translates an accepted provider function call into a typed `ToolRequest`. The tool registry validates and executes that request locally. The agent loop retains every accepted call and bounded output for the current turn, and sends that ordered history back to the provider so the model can continue the same task without repeating completed inspection. A rejected or failed tool operation returns a generic failure result to the model; it does not expose internal errors or end the whole turn before the model can explain the outcome.
 
 Provider adapters validate external function-call payloads before creating domain requests. A provider payload cannot select an unavailable tool, add undeclared fields, or bypass the tool registry or permission manager.
 

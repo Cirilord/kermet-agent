@@ -29,7 +29,7 @@ impl<P: ModelProvider> AgentLoop<P> {
 
     for _ in 0..MAX_TURNS {
       let mut on_model_event = |event: ModelEvent| on_event(AgentEvent::Model(event));
-      let response = match self.provider.respond(request, &mut on_model_event) {
+      let response = match self.provider.respond(&request, &mut on_model_event) {
         Ok(response) => response,
         Err(error) => return Err(AgentLoopError::Model(error)),
       };
@@ -50,8 +50,7 @@ impl<P: ModelProvider> AgentLoop<P> {
             Err(_) => ToolOutput::failure(),
           };
           let tool_call = ModelToolCall::new(tool_call_id, tool_request, arguments);
-          request =
-            ModelRequest::with_tool_output(task, model_selection.clone(), tool_call, tool_output);
+          request = request.with_tool_output(tool_call, tool_output);
         }
       }
     }

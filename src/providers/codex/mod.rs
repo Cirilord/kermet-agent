@@ -40,25 +40,17 @@ impl CodexProvider {
   }
 
   fn body(&self, request: &ModelRequest) -> Value {
-    let input = match request.tool_output() {
-      Some(output) => {
-        let call = match request.tool_call() {
-          Some(call) => call,
-          None => return json!({}),
-        };
-        vec![
-          json!({"role":"user","content":request.task()}),
-          json!({"type":"function_call","call_id":call.id(),"name":call.tool_name().function_name(),"arguments":call.arguments()}),
-          json!({"type":"function_call_output","call_id":call.id(),"output":output.model_content()}),
-        ]
-      }
-      None => vec![json!({"role":"user","content":request.task()})],
-    };
+    let mut input = vec![json!({"role":"user","content":request.task()})];
+    for result in request.tool_results() {
+      let call = result.tool_call();
+      input.push(json!({"type":"function_call","call_id":call.id(),"name":call.tool_name().function_name(),"arguments":call.arguments()}));
+      input.push(json!({"type":"function_call_output","call_id":call.id(),"output":result.tool_output().model_content()}));
+    }
     let selection = request.model_selection();
 
     return json!({
       "model": selection.model(), "input": input,
-      "instructions": "You are Kermet, a coding agent. Use only the provided tools when needed.",
+      "instructions": "You are Kermet, a coding agent. Use only the provided tools when needed. Complete every requested artifact before answering. Do not repeat a tool call when an earlier result in this turn is sufficient, unless the workspace has changed or additional data is required.",
       "store": false, "stream": true, "tool_choice": "auto", "parallel_tool_calls": false,
       "reasoning": {"effort": selection.reasoning_effort().identifier()},
       "tools": [
@@ -161,13 +153,13 @@ fn account_headers(access_token: &str) -> Vec<(String, String)> {
 impl ModelProvider for CodexProvider {
   fn respond(
     &self,
-    request: ModelRequest,
+    request: &ModelRequest,
     on_event: &mut dyn FnMut(ModelEvent),
   ) -> Result<ModelResponse, ModelProviderError> {
     if !self.is_configured() {
       return Err(ModelProviderError::MissingCredentials);
     }
-    let response = match self.send(self.body(&request), on_event) {
+    let response = match self.send(self.body(request), on_event) {
       Ok(response) => response,
       Err(error) => return Err(error),
     };
@@ -435,11 +427,64 @@ fn parse_line_number(value: &Value) -> Result<usize, ModelProviderError> {
 
 #[cfg(test)]
 mod tests {
-  use super::{parse_sse, parse_sse_line};
+  use super::{CodexProvider, parse_sse, parse_sse_line};
   use crate::{
-    models::{ModelEvent, ModelResponse},
-    tools::ToolRequest,
+    agent::{PermissionMode, TaskRequest},
+    models::{
+      ModelEvent, ModelRequest, ModelResponse, ModelSelection, ModelToolCall, ReasoningEffort,
+    },
+    tools::{ReadRequest, ToolOutput, ToolRequest},
+    workspace::Workspace,
   };
+  use serde_json::Value;
+  use std::path::PathBuf;
+
+  #[test]
+  fn sends_all_prior_tool_results_in_a_continuation_request() -> () {
+    let task = TaskRequest::new(
+      "inspect the project".to_owned(),
+      Workspace::new(PathBuf::from("/workspace"), false),
+      PermissionMode::ReadOnly,
+    )
+    .expect("the task should be valid");
+    let selection = ModelSelection::new(
+      "codex".to_owned(),
+      "gpt-5.6-luna".to_owned(),
+      ReasoningEffort::Medium,
+    )
+    .expect("the selection should be valid");
+    let first_call = ModelToolCall::new(
+      "call_1".to_owned(),
+      ToolRequest::Read(ReadRequest::new(PathBuf::from("Cargo.toml"))),
+      r#"{"path":"Cargo.toml"}"#.to_owned(),
+    );
+    let second_call = ModelToolCall::new(
+      "call_2".to_owned(),
+      ToolRequest::Read(ReadRequest::new(PathBuf::from("src/main.rs"))),
+      r#"{"path":"src/main.rs"}"#.to_owned(),
+    );
+    let request = ModelRequest::initial(&task, selection)
+      .with_tool_output(first_call, ToolOutput::failure())
+      .with_tool_output(second_call, ToolOutput::failure());
+    let provider = CodexProvider::new("access-token".to_owned());
+    let body = provider.body(&request);
+    let input = body
+      .get("input")
+      .and_then(Value::as_array)
+      .expect("the request should contain input");
+
+    assert_eq!(input.len(), 5);
+    assert_eq!(
+      input[1].get("call_id").and_then(Value::as_str),
+      Some("call_1")
+    );
+    assert_eq!(
+      input[3].get("call_id").and_then(Value::as_str),
+      Some("call_2")
+    );
+
+    return;
+  }
 
   #[test]
   fn parses_a_final_message() -> () {

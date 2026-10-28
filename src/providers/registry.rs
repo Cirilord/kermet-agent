@@ -55,7 +55,7 @@ pub enum ConfiguredModelProvider {
 impl ModelProvider for ConfiguredModelProvider {
   fn respond(
     &self,
-    request: ModelRequest,
+    request: &ModelRequest,
     on_event: &mut dyn FnMut(ModelEvent),
   ) -> Result<ModelResponse, ModelProviderError> {
     let response = match *self {

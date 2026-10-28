@@ -10,7 +10,7 @@ use crate::{
 pub trait ModelProvider {
   fn respond(
     &self,
-    request: ModelRequest,
+    request: &ModelRequest,
     on_event: &mut dyn FnMut(ModelEvent),
   ) -> Result<ModelResponse, ModelProviderError>;
 }
@@ -25,8 +25,7 @@ pub enum ModelEvent {
 pub struct ModelRequest {
   task: String,
   model_selection: ModelSelection,
-  tool_output: Option<ToolOutput>,
-  tool_call: Option<ModelToolCall>,
+  tool_results: Vec<ModelToolResult>,
 }
 
 impl ModelRequest {
@@ -34,23 +33,17 @@ impl ModelRequest {
     return Self {
       task: task.task().to_owned(),
       model_selection,
-      tool_output: None,
-      tool_call: None,
+      tool_results: Vec::new(),
     };
   }
 
-  pub fn with_tool_output(
-    task: &TaskRequest,
-    model_selection: ModelSelection,
-    tool_call: ModelToolCall,
-    tool_output: ToolOutput,
-  ) -> Self {
-    return Self {
-      task: task.task().to_owned(),
-      model_selection,
-      tool_output: Some(tool_output),
-      tool_call: Some(tool_call),
-    };
+  pub fn with_tool_output(mut self, tool_call: ModelToolCall, tool_output: ToolOutput) -> Self {
+    self.tool_results.push(ModelToolResult {
+      tool_call,
+      tool_output,
+    });
+
+    return self;
   }
 
   pub fn model_selection(&self) -> &ModelSelection {
@@ -61,12 +54,24 @@ impl ModelRequest {
     return &self.task;
   }
 
-  pub fn tool_output(&self) -> Option<&ToolOutput> {
-    return self.tool_output.as_ref();
+  pub fn tool_results(&self) -> &[ModelToolResult] {
+    return &self.tool_results;
+  }
+}
+
+#[derive(Debug)]
+pub struct ModelToolResult {
+  tool_call: ModelToolCall,
+  tool_output: ToolOutput,
+}
+
+impl ModelToolResult {
+  pub fn tool_call(&self) -> &ModelToolCall {
+    return &self.tool_call;
   }
 
-  pub fn tool_call(&self) -> Option<&ModelToolCall> {
-    return self.tool_call.as_ref();
+  pub fn tool_output(&self) -> &ToolOutput {
+    return &self.tool_output;
   }
 }
 
@@ -119,4 +124,51 @@ pub enum ModelProviderError {
   RequestFailed,
   InvalidResponse,
   UnsupportedToolCall,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::{ModelRequest, ModelToolCall};
+  use crate::{
+    agent::{PermissionMode, TaskRequest},
+    models::{ModelSelection, ReasoningEffort},
+    tools::{ReadRequest, ToolOutput, ToolRequest},
+    workspace::Workspace,
+  };
+  use std::path::PathBuf;
+
+  #[test]
+  fn preserves_all_tool_results_for_the_next_provider_request() -> () {
+    let task = TaskRequest::new(
+      "inspect the project".to_owned(),
+      Workspace::new(PathBuf::from("/workspace"), false),
+      PermissionMode::ReadOnly,
+    )
+    .expect("the task should be valid");
+    let selection = ModelSelection::new(
+      "codex".to_owned(),
+      "gpt-5.6-luna".to_owned(),
+      ReasoningEffort::Medium,
+    )
+    .expect("the selection should be valid");
+    let first_call = ModelToolCall::new(
+      "call_1".to_owned(),
+      ToolRequest::Read(ReadRequest::new(PathBuf::from("Cargo.toml"))),
+      r#"{"path":"Cargo.toml"}"#.to_owned(),
+    );
+    let second_call = ModelToolCall::new(
+      "call_2".to_owned(),
+      ToolRequest::Read(ReadRequest::new(PathBuf::from("src/main.rs"))),
+      r#"{"path":"src/main.rs"}"#.to_owned(),
+    );
+    let request = ModelRequest::initial(&task, selection)
+      .with_tool_output(first_call, ToolOutput::failure())
+      .with_tool_output(second_call, ToolOutput::failure());
+
+    assert_eq!(request.tool_results().len(), 2);
+    assert_eq!(request.tool_results()[0].tool_call().id(), "call_1");
+    assert_eq!(request.tool_results()[1].tool_call().id(), "call_2");
+
+    return;
+  }
 }

@@ -16,7 +16,7 @@ impl FakeModelProvider {
 impl ModelProvider for FakeModelProvider {
   fn respond(
     &self,
-    _request: ModelRequest,
+    _request: &ModelRequest,
     _on_event: &mut dyn FnMut(ModelEvent),
   ) -> Result<ModelResponse, ModelProviderError> {
     let mut responses = match self.responses.lock() {
