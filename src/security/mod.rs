@@ -1,6 +1,7 @@
 mod capability;
 mod credentials;
 mod permission;
+pub mod sandbox;
 
 pub use capability::Capability;
 pub use credentials::{

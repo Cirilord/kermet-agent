@@ -28,9 +28,11 @@ Permissions are evaluated for every tool call. Approval is specific to a capabil
 
 `PermissionManager` applies this table deterministically. Process execution is denied in `read-only` and `workspace-write`; it requires explicit `expanded-access`.
 
-### Temporary Bash execution boundary
+### Sandbox foundation and temporary Bash execution boundary
 
-The initial `bash` tool has no OS process sandbox. It is available only with `expanded-access`, starts with the workspace as its working directory, accepts no standard input, clears its environment except for `PATH`, times out after 30 seconds, and bounds each output stream to 32 KiB. Those controls do not restrict filesystem access, child processes, or network access. The local Hub currently creates turns with `expanded-access` for testing; it must return to a restricted mode or gain a per-turn permission control when the shared sandbox boundary is introduced.
+`security::sandbox::core` defines typed policies for read-only, workspace-write, and danger-full-access execution; explicit network access; resource limits; typed process requests and outputs; and a shared execution contract. `Sandbox::current()` selects the adapter for the current platform from `security::sandbox::environments`. `SandboxRunner` is the internal contract implemented by each adapter. On macOS, the adapter compiles the policy to Seatbelt and invokes `/usr/bin/sandbox-exec`. Unsupported platforms intentionally fail closed until a native adapter is available.
+
+The initial `bash` tool is not connected to this boundary yet. It has no OS process sandbox, is available only with `expanded-access`, starts with the workspace as its working directory, accepts no standard input, clears its environment except for `PATH`, times out after 30 seconds, and bounds each output stream to 32 KiB. Those controls do not restrict filesystem access, child processes, or network access. The local Hub currently creates turns with `expanded-access` for testing; it must return to a restricted mode or gain a per-turn permission control when `bash` adopts a platform-enforced sandbox.
 
 ## Tool requirements
 

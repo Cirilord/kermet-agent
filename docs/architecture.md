@@ -29,8 +29,9 @@ The Hub keeps session authorization, request limits, and response protections in
 | Agent core | Runs an explicit, observable state machine for a task. |
 | Provider registry | Resolves a configured provider through its credential boundary and returns a typed provider instance. |
 | Model provider | Translates provider-specific model and tool-calling protocols into internal types, preserving each accepted tool call's identifier and validated arguments for the continuation request. |
-| Tool registry | Defines, validates, and executes available tools. The initial Bash tool is gated by `expanded-access` and will adopt the shared sandbox runner when it exists. |
+| Tool registry | Defines, validates, and executes available tools. The initial Bash tool is gated by `expanded-access` and will adopt the shared sandbox runner after platform enforcement is implemented. |
 | Permission manager | Applies deterministic authorization policy before tool execution. |
+| Sandbox runner | Defines the platform-independent policy, process request, resource limits, and execution contract. Its `core/` module owns those contracts, while `environments/` selects a native adapter for the current platform. macOS uses Seatbelt; unsupported platforms fail closed until a native adapter is available. |
 | Context manager | Selects the smallest useful context under a token budget. |
 | Codebase context | Indexes and retrieves files, symbols, relationships, and cached code ranges. |
 | Evidence store | Records changes, commands, test results, and validation outcomes. |
