@@ -6,9 +6,9 @@ Every tool and integration begins with a capability boundary, threat model, perm
 
 Default to deny. Grant the smallest capability needed for the current operation and fail closed when authorization, validation, or sandbox enforcement cannot be established.
 
-## Capability vocabulary
+## Legacy capability vocabulary
 
-Capabilities describe the action requested by a tool. The initial capabilities are `read-file`, `search-files`, `write-file`, and `execute-process`. Their identifiers are stable for policy decisions and audit records; tool-specific inputs such as paths, ranges, and commands remain outside the capability.
+The legacy permission flow describes the action requested by a tool with `read-file`, `search-files`, `write-file`, and `execute-process`. Those identifiers remain stable until `PermissionMode` and `PermissionManager` are removed. The new execution-policy flow uses tool-defined `ExecutionRequirement` values instead.
 
 ## Trust boundaries
 
@@ -17,6 +17,8 @@ Treat all content outside the Kermet runtime as untrusted data, including user r
 Only deterministic policy code can authorize an action. An LLM may request a tool call; it cannot grant itself access.
 
 ## Permission modes
+
+The legacy permission mode is the active authorization boundary until the execution-policy migration is complete. Do not add new consumers of it.
 
 | Mode | Allowed capabilities |
 | --- | --- |
@@ -27,6 +29,12 @@ Only deterministic policy code can authorize an action. An LLM may request a too
 Permissions are evaluated for every tool call. Approval is specific to a capability and scope; it must not become implicit permission for unrelated actions.
 
 `PermissionManager` applies this table deterministically. Process execution is denied in `read-only` and `workspace-write`; it requires explicit `expanded-access`.
+
+## Execution policy
+
+`ExecutionPolicy` is the replacement policy boundary under construction. It keeps independent controls for `SandboxMode`, `NetworkAccess`, and `ApprovalPolicy`. Each tool defines its own `ExecutionRequirement`; `AuthorizationManager` evaluates that requirement against the active policy and returns `Allowed`, `RequiresApproval(ApprovalRequest)`, or `Denied(AuthorizationDenied)`. `ApprovalPolicy::OnRequest` means a requirement outside the active policy produces a typed approval request; it does not grant the action. `ApprovalPolicy::Never` denies such a requirement. `danger-full-access` requires explicitly allowed network access.
+
+Until the migration is complete, the new policy and authorization boundary are not read by `TaskRequest`, the CLI, Hub, or tools. `PermissionManager` remains the active authorization boundary.
 
 ### Sandbox foundation and temporary Bash execution boundary
 

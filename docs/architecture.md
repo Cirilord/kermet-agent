@@ -16,7 +16,7 @@ The Hub keeps session authorization, request limits, and response protections in
 
 ## Task request
 
-`TaskRequest` is the typed boundary between the CLI and agent core. It contains a non-empty task, a validated workspace, and the requested permission mode. It carries domain data only: Clap types, provider configuration, and tool execution stay outside it.
+`TaskRequest` is the typed boundary between the CLI and agent core. It contains a non-empty task, a validated workspace, and the requested permission mode. It carries domain data only: Clap types, provider configuration, and tool execution stay outside it. `ExecutionPolicy` is the staged replacement for the permission mode and will become this boundary after its authorization flow is implemented.
 
 ## Workspace catalog
 
