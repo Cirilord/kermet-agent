@@ -49,14 +49,14 @@ pub struct RunArgs {
   #[arg(long, default_value = ".")]
   pub workspace: PathBuf,
   /// Filesystem boundary for tool execution.
-  #[arg(long, value_enum, default_value_t = CliSandboxMode::ReadOnly)]
-  pub sandbox: CliSandboxMode,
+  #[arg(long, value_enum)]
+  pub sandbox: Option<CliSandboxMode>,
   /// Network access available to tool execution.
-  #[arg(long, value_enum, default_value_t = CliNetworkAccess::Denied)]
-  pub network: CliNetworkAccess,
+  #[arg(long, value_enum)]
+  pub network: Option<CliNetworkAccess>,
   /// How Kermet handles actions outside the execution policy.
-  #[arg(long, value_enum, default_value_t = CliApprovalPolicy::OnRequest)]
-  pub approval_policy: CliApprovalPolicy,
+  #[arg(long, value_enum)]
+  pub approval_policy: Option<CliApprovalPolicy>,
   /// Configuration profile that selects the provider and model.
   #[arg(long, default_value = "default")]
   pub profile: String,
@@ -115,13 +115,13 @@ pub enum ConfigCommand {
 
 #[derive(Args, Debug)]
 pub struct ConfigGetArgs {
-  /// A profile key such as profiles.default.model.
+  /// A configuration key such as execution.sandbox or profiles.default.model.
   pub key: String,
 }
 
 #[derive(Args, Debug)]
 pub struct ConfigSetArgs {
-  /// A profile key such as profiles.default.model.
+  /// A configuration key such as execution.sandbox or profiles.default.model.
   pub key: String,
   /// Value to save for the selected key.
   pub value: String,
@@ -129,7 +129,7 @@ pub struct ConfigSetArgs {
 
 #[derive(Args, Debug)]
 pub struct ConfigUnsetArgs {
-  /// A profile key such as profiles.default.model.
+  /// A configuration key such as execution.sandbox or profiles.default.model.
   pub key: String,
 }
 
@@ -270,9 +270,12 @@ mod tests {
       Some("inspect the authentication flow")
     );
     assert_eq!(arguments.workspace, std::path::PathBuf::from("./workspace"));
-    assert_eq!(arguments.sandbox, CliSandboxMode::WorkspaceWrite);
-    assert_eq!(arguments.network, CliNetworkAccess::Denied);
-    assert_eq!(arguments.approval_policy, CliApprovalPolicy::OnRequest);
+    assert_eq!(arguments.sandbox, Some(CliSandboxMode::WorkspaceWrite));
+    assert_eq!(arguments.network, Some(CliNetworkAccess::Denied));
+    assert_eq!(
+      arguments.approval_policy,
+      Some(CliApprovalPolicy::OnRequest)
+    );
 
     return;
   }

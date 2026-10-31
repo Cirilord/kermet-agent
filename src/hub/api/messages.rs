@@ -10,10 +10,9 @@ use std::path::PathBuf;
 use super::super::controllers::HubState;
 use crate::{
   agent::{AgentEvent, TaskRequest},
-  config::{ModelOverrides, resolve_model_selection, user_path},
-  security::{
-    ApprovalPolicy, ExecutionPolicy,
-    sandbox::{NetworkAccess, SandboxMode},
+  config::{
+    ExecutionOverrides, ModelOverrides, resolve_execution_policy, resolve_model_selection,
+    user_path,
   },
   turn::execute_turn,
   workspace::Workspace,
@@ -92,7 +91,8 @@ fn start_turn(state: HubState, thread: crate::thread::Thread, message: String) -
         return;
       }
     };
-    let execution_policy = match execution_policy() {
+    let execution_policy = match resolve_execution_policy(&config_path, ExecutionOverrides::none())
+    {
       Ok(policy) => policy,
       Err(_) => {
         state_for_turn.publish(&thread_id, "failed", "policy".to_owned());
@@ -146,16 +146,6 @@ fn start_turn(state: HubState, thread: crate::thread::Thread, message: String) -
   return;
 }
 
-fn execution_policy() -> Result<ExecutionPolicy, crate::security::ExecutionPolicyError> {
-  let policy = ExecutionPolicy::new(
-    SandboxMode::DangerFullAccess,
-    NetworkAccess::Allowed,
-    ApprovalPolicy::Never,
-  );
-
-  return policy;
-}
-
 fn open_workspace(path: PathBuf) -> Result<Workspace, ()> {
   let metadata = match std::fs::metadata(&path) {
     Ok(metadata) => metadata,
@@ -169,26 +159,4 @@ fn open_workspace(path: PathBuf) -> Result<Workspace, ()> {
     Err(_) => return Err(()),
   };
   return Ok(Workspace::new(path.clone(), path.join(".git").exists()));
-}
-
-#[cfg(test)]
-mod tests {
-  use super::execution_policy;
-  use crate::security::{
-    ApprovalPolicy, ExecutionPolicy,
-    sandbox::{NetworkAccess, SandboxMode},
-  };
-
-  #[test]
-  fn enables_full_access_for_hub_turns() -> () {
-    let expected = ExecutionPolicy::new(
-      SandboxMode::DangerFullAccess,
-      NetworkAccess::Allowed,
-      ApprovalPolicy::Never,
-    );
-
-    assert_eq!(execution_policy(), expected);
-
-    return;
-  }
 }

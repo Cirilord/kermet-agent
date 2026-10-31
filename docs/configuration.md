@@ -9,11 +9,14 @@ kermet config init
 kermet config set profiles.default.provider codex
 kermet config set profiles.default.model gpt-6.1-sol
 kermet config set profiles.default.reasoning_effort medium
+kermet config set execution.sandbox workspace-write
+kermet config set execution.network denied
+kermet config set execution.approval_policy on-request
 kermet config get profiles.default.model
 kermet config check
 ```
 
-`config unset profiles.default.model` removes a value. `config check --profile NAME` resolves and validates the selected profile. The commands accept only `provider`, `model`, and `reasoning_effort` keys under `profiles.<name>`.
+`config unset profiles.default.model` removes a value. `config check --profile NAME` resolves and validates the selected profile and global execution policy. The commands accept `provider`, `model`, and `reasoning_effort` keys under `profiles.<name>`, plus `execution.sandbox`, `execution.network`, and `execution.approval_policy`.
 
 ## Model profiles
 
@@ -43,13 +46,16 @@ kermet run \
 
 ## Execution policy
 
-Each `run` invocation carries an explicit execution policy. Its defaults are read-only filesystem access, denied network access, and approval on request:
+The global `[execution]` section selects the execution policy for both `run` and Hub turns:
 
-```sh
-kermet run "Inspect src/main.rs"
+```toml
+[execution]
+sandbox = "workspace-write"
+network = "denied"
+approval_policy = "on-request"
 ```
 
-Use `--sandbox read-only|workspace-write|danger-full-access`, `--network denied|allowed`, and `--approval-policy on-request|never` to select the policy. `danger-full-access` requires `--network allowed`. A requirement outside the selected policy is returned as an approval request when the policy is `on-request`; the CLI does not grant it automatically.
+Use `--sandbox read-only|workspace-write|danger-full-access`, `--network denied|allowed`, and `--approval-policy on-request|never` only to override those settings for one `run` invocation. `danger-full-access` requires `network = "allowed"`. A requirement outside the selected policy is returned as an approval request when the policy is `on-request`; the CLI does not grant it automatically.
 
 ## Interactive threads
 
@@ -94,3 +100,5 @@ Kermet resolves provider settings in this order:
 3. an explicit configuration error.
 
 Kermet does not select a provider, model, or reasoning effort implicitly. `config check` validates the local configuration; provider-side model availability is validated when the provider executes a request.
+
+Execution settings resolve from command-line overrides and then `[execution]`. All three fields must be present after resolution.

@@ -15,6 +15,16 @@ impl ApprovalPolicy {
 
     return identifier;
   }
+
+  pub fn from_identifier(value: &str) -> Option<Self> {
+    let policy = match value {
+      "on-request" => Some(Self::OnRequest),
+      "never" => Some(Self::Never),
+      _ => None,
+    };
+
+    return policy;
+  }
 }
 
 impl Display for ApprovalPolicy {

@@ -118,6 +118,12 @@ fn run_rejects_an_unsupported_model_provider() -> () {
       "gpt-6.1-sol",
       "--reasoning-effort",
       "medium",
+      "--sandbox",
+      "read-only",
+      "--network",
+      "denied",
+      "--approval-policy",
+      "never",
     ])
     .output()
     .expect("the Kermet binary should execute");
@@ -146,6 +152,12 @@ fn run_rejects_an_empty_task() -> () {
       "gpt-6.1-sol",
       "--reasoning-effort",
       "medium",
+      "--sandbox",
+      "read-only",
+      "--network",
+      "denied",
+      "--approval-policy",
+      "never",
     ])
     .output()
     .expect("the Kermet binary should execute");

@@ -5,7 +5,8 @@ pub use args::Cli;
 
 use crate::agent::{AgentEvent, AgentLoopError, TaskRequest, TaskRequestError};
 use crate::config::{
-  ConfigError, ModelOverrides, get, initialize, resolve_model_selection, set, unset, user_path,
+  ConfigError, ExecutionOverrides, ModelOverrides, get, initialize, resolve_execution_policy,
+  resolve_model_selection, set, unset, user_path,
 };
 use crate::hub::{HubError, serve};
 use crate::ids::IdGenerator;
@@ -15,7 +16,7 @@ use crate::providers::codex::auth::{
   AuthorizationRequest, CodexCredentialStore, TokenClient, UreqTokenTransport,
   receive_authorization_code,
 };
-use crate::security::{ExecutionPolicy, ExecutionPolicyError, KeyringCredentialStore};
+use crate::security::{ExecutionPolicy, KeyringCredentialStore};
 use crate::thread::{Thread, ThreadStore, ThreadStoreError};
 use crate::turn::{TurnError, execute_turn};
 use crate::utils::CallbackServer;
@@ -47,12 +48,6 @@ fn report_task_request_error(error: &TaskRequestError) -> () {
   return;
 }
 
-fn report_execution_policy_error(error: &ExecutionPolicyError) -> () {
-  eprintln!("error: {error}");
-
-  return;
-}
-
 fn report_configuration_error(error: &ConfigError) -> () {
   let message = match *error {
     ConfigError::HomeUnavailable => "the user home directory is unavailable",
@@ -66,6 +61,10 @@ fn report_configuration_error(error: &ConfigError) -> () {
     ConfigError::MissingModel => "no model is configured",
     ConfigError::MissingReasoningEffort => "no reasoning effort is configured",
     ConfigError::InvalidSelection(_) => "the model selection is invalid",
+    ConfigError::MissingSandboxMode => "the execution sandbox is not configured",
+    ConfigError::MissingNetworkAccess => "the execution network access is not configured",
+    ConfigError::MissingApprovalPolicy => "the execution approval policy is not configured",
+    ConfigError::InvalidExecutionPolicy(_) => "the execution policy is invalid",
   };
 
   eprintln!("error: {message}");
@@ -220,6 +219,19 @@ fn config(arguments: ConfigArgs) -> ExitCode {
             "Reasoning effort: {}",
             selection.reasoning_effort().identifier()
           );
+          let execution_policy = match resolve_execution_policy(&path, ExecutionOverrides::none()) {
+            Ok(policy) => policy,
+            Err(error) => {
+              report_configuration_error(&error);
+              return ExitCode::from(CONFIGURATION_EXIT_CODE);
+            }
+          };
+          println!("Sandbox: {}", execution_policy.sandbox_mode().identifier());
+          println!(
+            "Network: {}",
+            execution_policy.network_access().identifier()
+          );
+          println!("Approval policy: {}", execution_policy.approval_policy());
         }
         Err(error) => {
           report_configuration_error(&error);
@@ -323,13 +335,6 @@ fn run_task(arguments: RunArgs) -> ExitCode {
   if arguments.interactive {
     return run_interactive(arguments);
   }
-  let execution_policy = match execution_policy(&arguments) {
-    Ok(policy) => policy,
-    Err(error) => {
-      report_execution_policy_error(&error);
-      return ExitCode::from(INVALID_INPUT_EXIT_CODE);
-    }
-  };
   let task = match arguments.task {
     Some(task) => task,
     None => {
@@ -337,6 +342,11 @@ fn run_task(arguments: RunArgs) -> ExitCode {
 
       return ExitCode::from(INVALID_INPUT_EXIT_CODE);
     }
+  };
+  let execution_overrides = ExecutionOverrides {
+    sandbox_mode: arguments.sandbox.map(Into::into),
+    network_access: arguments.network.map(Into::into),
+    approval_policy: arguments.approval_policy.map(Into::into),
   };
   let config_path = match user_path() {
     Ok(config_path) => config_path,
@@ -352,6 +362,13 @@ fn run_task(arguments: RunArgs) -> ExitCode {
   };
   let model_selection = match resolve_model_selection(&config_path, &arguments.profile, overrides) {
     Ok(model_selection) => model_selection,
+    Err(error) => {
+      report_configuration_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+  let execution_policy = match resolve_execution_policy(&config_path, execution_overrides) {
+    Ok(policy) => policy,
     Err(error) => {
       report_configuration_error(&error);
       return ExitCode::from(CONFIGURATION_EXIT_CODE);
@@ -393,15 +410,15 @@ fn run_task(arguments: RunArgs) -> ExitCode {
 }
 
 fn run_interactive(arguments: RunArgs) -> ExitCode {
-  let execution_policy = match execution_policy(&arguments) {
-    Ok(policy) => policy,
-    Err(error) => {
-      report_execution_policy_error(&error);
-      return ExitCode::from(INVALID_INPUT_EXIT_CODE);
-    }
-  };
   let config_path = match user_path() {
     Ok(path) => path,
+    Err(error) => {
+      report_configuration_error(&error);
+      return ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+  let execution_policy = match execution_policy(&config_path, &arguments) {
+    Ok(policy) => policy,
     Err(error) => {
       report_configuration_error(&error);
       return ExitCode::from(CONFIGURATION_EXIT_CODE);
@@ -537,12 +554,16 @@ fn run_interactive(arguments: RunArgs) -> ExitCode {
   return ExitCode::SUCCESS;
 }
 
-fn execution_policy(arguments: &RunArgs) -> Result<ExecutionPolicy, ExecutionPolicyError> {
-  let policy = ExecutionPolicy::new(
-    arguments.sandbox.into(),
-    arguments.network.into(),
-    arguments.approval_policy.into(),
-  );
+fn execution_policy(
+  path: &std::path::Path,
+  arguments: &RunArgs,
+) -> Result<ExecutionPolicy, ConfigError> {
+  let overrides = ExecutionOverrides {
+    sandbox_mode: arguments.sandbox.map(Into::into),
+    network_access: arguments.network.map(Into::into),
+    approval_policy: arguments.approval_policy.map(Into::into),
+  };
+  let policy = resolve_execution_policy(path, overrides);
 
   return policy;
 }

@@ -1,4 +1,10 @@
-use crate::models::{ModelSelection, ModelSelectionError, ReasoningEffort};
+use crate::{
+  models::{ModelSelection, ModelSelectionError, ReasoningEffort},
+  security::{
+    ApprovalPolicy, ExecutionPolicy, ExecutionPolicyError,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
+};
 use serde::Deserialize;
 use std::{
   collections::HashMap,
@@ -19,6 +25,22 @@ impl ModelOverrides {
       provider: None,
       model: None,
       reasoning_effort: None,
+    };
+  }
+}
+
+pub struct ExecutionOverrides {
+  pub sandbox_mode: Option<SandboxMode>,
+  pub network_access: Option<NetworkAccess>,
+  pub approval_policy: Option<ApprovalPolicy>,
+}
+
+impl ExecutionOverrides {
+  pub fn none() -> Self {
+    return Self {
+      sandbox_mode: None,
+      network_access: None,
+      approval_policy: None,
     };
   }
 }
@@ -79,9 +101,50 @@ pub fn resolve_model_selection(
   return Ok(selection);
 }
 
+pub fn resolve_execution_policy(
+  path: &Path,
+  overrides: ExecutionOverrides,
+) -> Result<ExecutionPolicy, ConfigError> {
+  let configuration = match Configuration::load(path) {
+    Ok(configuration) => configuration,
+    Err(error) => return Err(error),
+  };
+  let sandbox_mode = match overrides.sandbox_mode {
+    Some(mode) => Some(mode),
+    None => configuration.execution.sandbox_mode(),
+  };
+  let network_access = match overrides.network_access {
+    Some(access) => Some(access),
+    None => configuration.execution.network_access(),
+  };
+  let approval_policy = match overrides.approval_policy {
+    Some(policy) => Some(policy),
+    None => configuration.execution.approval_policy(),
+  };
+  let sandbox_mode = match sandbox_mode {
+    Some(mode) => mode,
+    None => return Err(ConfigError::MissingSandboxMode),
+  };
+  let network_access = match network_access {
+    Some(access) => access,
+    None => return Err(ConfigError::MissingNetworkAccess),
+  };
+  let approval_policy = match approval_policy {
+    Some(policy) => policy,
+    None => return Err(ConfigError::MissingApprovalPolicy),
+  };
+  let policy = match ExecutionPolicy::new(sandbox_mode, network_access, approval_policy) {
+    Ok(policy) => policy,
+    Err(error) => return Err(ConfigError::InvalidExecutionPolicy(error)),
+  };
+
+  return Ok(policy);
+}
+
 pub fn initialize(path: &Path) -> Result<(), ConfigError> {
   let configuration = Configuration {
     profiles: HashMap::new(),
+    execution: ExecutionConfiguration::safe_default(),
   };
   let parent = match path.parent() {
     Some(parent) => parent,
@@ -106,7 +169,7 @@ pub fn initialize(path: &Path) -> Result<(), ConfigError> {
 }
 
 pub fn get(path: &Path, key: &str) -> Result<Option<String>, ConfigError> {
-  let key = match ProfileKey::parse(key) {
+  let key = match ConfigKey::parse(key) {
     Ok(key) => key,
     Err(error) => return Err(error),
   };
@@ -114,16 +177,19 @@ pub fn get(path: &Path, key: &str) -> Result<Option<String>, ConfigError> {
     Ok(configuration) => configuration,
     Err(error) => return Err(error),
   };
-  let value = match configuration.profiles.get(&key.profile) {
-    Some(profile) => profile.get(key.field),
-    None => None,
+  let value = match key {
+    ConfigKey::Profile(key) => match configuration.profiles.get(&key.profile) {
+      Some(profile) => profile.get(key.field),
+      None => None,
+    },
+    ConfigKey::Execution(field) => configuration.execution.get(field),
   };
 
   return Ok(value);
 }
 
 pub fn set(path: &Path, key: &str, value: String) -> Result<(), ConfigError> {
-  let key = match ProfileKey::parse(key) {
+  let key = match ConfigKey::parse(key) {
     Ok(key) => key,
     Err(error) => return Err(error),
   };
@@ -131,9 +197,16 @@ pub fn set(path: &Path, key: &str, value: String) -> Result<(), ConfigError> {
     Ok(configuration) => configuration,
     Err(error) => return Err(error),
   };
-  let profile = configuration.profiles.entry(key.profile).or_default();
+  let result = match key {
+    ConfigKey::Profile(key) => {
+      let profile = configuration.profiles.entry(key.profile).or_default();
 
-  match profile.set(key.field, value) {
+      profile.set(key.field, value)
+    }
+    ConfigKey::Execution(field) => configuration.execution.set(field, value),
+  };
+
+  match result {
     Ok(()) => {}
     Err(error) => return Err(error),
   }
@@ -142,7 +215,7 @@ pub fn set(path: &Path, key: &str, value: String) -> Result<(), ConfigError> {
 }
 
 pub fn unset(path: &Path, key: &str) -> Result<bool, ConfigError> {
-  let key = match ProfileKey::parse(key) {
+  let key = match ConfigKey::parse(key) {
     Ok(key) => key,
     Err(error) => return Err(error),
   };
@@ -150,17 +223,22 @@ pub fn unset(path: &Path, key: &str) -> Result<bool, ConfigError> {
     Ok(configuration) => configuration,
     Err(error) => return Err(error),
   };
-  let removed = match configuration.profiles.get_mut(&key.profile) {
-    Some(profile) => profile.unset(key.field),
-    None => false,
+  let removed = match key {
+    ConfigKey::Profile(ref key) => match configuration.profiles.get_mut(&key.profile) {
+      Some(profile) => profile.unset(key.field),
+      None => false,
+    },
+    ConfigKey::Execution(field) => configuration.execution.unset(field),
   };
-  let remove_profile = configuration
-    .profiles
-    .get(&key.profile)
-    .is_some_and(ProfileConfiguration::is_empty);
+  if let ConfigKey::Profile(key) = key {
+    let remove_profile = configuration
+      .profiles
+      .get(&key.profile)
+      .is_some_and(ProfileConfiguration::is_empty);
 
-  if remove_profile {
-    configuration.profiles.remove(&key.profile);
+    if remove_profile {
+      configuration.profiles.remove(&key.profile);
+    }
   }
   if removed {
     match configuration.save(path) {
@@ -174,6 +252,7 @@ pub fn unset(path: &Path, key: &str) -> Result<bool, ConfigError> {
 
 struct Configuration {
   profiles: HashMap<String, ProfileConfiguration>,
+  execution: ExecutionConfiguration,
 }
 
 impl Configuration {
@@ -183,6 +262,7 @@ impl Configuration {
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
         return Ok(Self {
           profiles: HashMap::new(),
+          execution: ExecutionConfiguration::default(),
         });
       }
       Err(_) => return Err(ConfigError::Unreadable),
@@ -194,6 +274,7 @@ impl Configuration {
 
     return Ok(Self {
       profiles: document.profiles,
+      execution: document.execution,
     });
   }
 
@@ -233,6 +314,11 @@ impl Configuration {
     let mut contents =
       String::from("# Kermet configuration. Credentials are stored in the system keyring.\n");
 
+    if !self.execution.is_empty() {
+      contents.push_str("\n[execution]\n");
+      self.execution.write_to(&mut contents);
+    }
+
     for (profile_name, profile) in profiles {
       contents.push_str(&format!("\n[profiles.{profile_name}]\n"));
       profile.write_to(&mut contents);
@@ -265,6 +351,118 @@ fn open_temporary_file(parent: &Path) -> Result<(PathBuf, File), ConfigError> {
 struct ConfigurationDocument {
   #[serde(default)]
   profiles: HashMap<String, ProfileConfiguration>,
+  #[serde(default)]
+  execution: ExecutionConfiguration,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExecutionConfiguration {
+  sandbox: Option<String>,
+  network: Option<String>,
+  approval_policy: Option<String>,
+}
+
+impl ExecutionConfiguration {
+  fn safe_default() -> Self {
+    return Self {
+      sandbox: Some("read-only".to_owned()),
+      network: Some("denied".to_owned()),
+      approval_policy: Some("on-request".to_owned()),
+    };
+  }
+
+  fn sandbox_mode(&self) -> Option<SandboxMode> {
+    let mode = self
+      .sandbox
+      .as_deref()
+      .and_then(SandboxMode::from_identifier);
+
+    return mode;
+  }
+
+  fn network_access(&self) -> Option<NetworkAccess> {
+    let access = self
+      .network
+      .as_deref()
+      .and_then(NetworkAccess::from_identifier);
+
+    return access;
+  }
+
+  fn approval_policy(&self) -> Option<ApprovalPolicy> {
+    let policy = self
+      .approval_policy
+      .as_deref()
+      .and_then(ApprovalPolicy::from_identifier);
+
+    return policy;
+  }
+
+  fn get(&self, field: ExecutionField) -> Option<String> {
+    let value = match field {
+      ExecutionField::Sandbox => self.sandbox.clone(),
+      ExecutionField::Network => self.network.clone(),
+      ExecutionField::ApprovalPolicy => self.approval_policy.clone(),
+    };
+
+    return value;
+  }
+
+  fn set(&mut self, field: ExecutionField, value: String) -> Result<(), ConfigError> {
+    let is_valid = match field {
+      ExecutionField::Sandbox => SandboxMode::from_identifier(&value).is_some(),
+      ExecutionField::Network => NetworkAccess::from_identifier(&value).is_some(),
+      ExecutionField::ApprovalPolicy => ApprovalPolicy::from_identifier(&value).is_some(),
+    };
+    if !is_valid {
+      return Err(ConfigError::InvalidValue);
+    }
+    match field {
+      ExecutionField::Sandbox => self.sandbox = Some(value),
+      ExecutionField::Network => self.network = Some(value),
+      ExecutionField::ApprovalPolicy => self.approval_policy = Some(value),
+    }
+
+    return Ok(());
+  }
+
+  fn unset(&mut self, field: ExecutionField) -> bool {
+    let removed = match field {
+      ExecutionField::Sandbox => self.sandbox.take().is_some(),
+      ExecutionField::Network => self.network.take().is_some(),
+      ExecutionField::ApprovalPolicy => self.approval_policy.take().is_some(),
+    };
+
+    return removed;
+  }
+
+  fn is_empty(&self) -> bool {
+    return self.sandbox.is_none() && self.network.is_none() && self.approval_policy.is_none();
+  }
+
+  fn write_to(&self, contents: &mut String) -> () {
+    if let Some(sandbox) = self.sandbox.as_ref() {
+      contents.push_str(&format!(
+        "sandbox = {}\n",
+        toml::Value::String(sandbox.clone())
+      ));
+    }
+    if let Some(network) = self.network.as_ref() {
+      contents.push_str(&format!(
+        "network = {}\n",
+        toml::Value::String(network.clone())
+      ));
+    }
+    if let Some(approval_policy) = self.approval_policy.as_ref() {
+      contents.push_str(&format!(
+        "approval_policy = {}\n",
+        toml::Value::String(approval_policy.clone())
+      ));
+    }
+
+    return;
+  }
 }
 
 #[derive(Clone, Default, Deserialize)]
@@ -343,6 +541,32 @@ impl ProfileConfiguration {
   }
 }
 
+enum ConfigKey {
+  Profile(ProfileKey),
+  Execution(ExecutionField),
+}
+
+impl ConfigKey {
+  fn parse(value: &str) -> Result<Self, ConfigError> {
+    if let Some(field) = value.strip_prefix("execution.") {
+      let field = match field {
+        "sandbox" => ExecutionField::Sandbox,
+        "network" => ExecutionField::Network,
+        "approval_policy" => ExecutionField::ApprovalPolicy,
+        _ => return Err(ConfigError::InvalidKey),
+      };
+
+      return Ok(Self::Execution(field));
+    }
+    let key = match ProfileKey::parse(value) {
+      Ok(key) => key,
+      Err(error) => return Err(error),
+    };
+
+    return Ok(Self::Profile(key));
+  }
+}
+
 struct ProfileKey {
   profile: String,
   field: ProfileField,
@@ -380,6 +604,13 @@ enum ProfileField {
   ReasoningEffort,
 }
 
+#[derive(Clone, Copy)]
+enum ExecutionField {
+  Sandbox,
+  Network,
+  ApprovalPolicy,
+}
+
 fn is_valid_profile(value: &str) -> bool {
   if value.is_empty() {
     return false;
@@ -403,12 +634,25 @@ pub enum ConfigError {
   MissingModel,
   MissingReasoningEffort,
   InvalidSelection(ModelSelectionError),
+  MissingSandboxMode,
+  MissingNetworkAccess,
+  MissingApprovalPolicy,
+  InvalidExecutionPolicy(ExecutionPolicyError),
 }
 
 #[cfg(test)]
 mod tests {
-  use super::{ConfigError, ModelOverrides, get, initialize, resolve_model_selection, set, unset};
-  use crate::models::ReasoningEffort;
+  use super::{
+    ConfigError, ExecutionOverrides, ModelOverrides, get, initialize, resolve_execution_policy,
+    resolve_model_selection, set, unset,
+  };
+  use crate::{
+    models::ReasoningEffort,
+    security::{
+      ApprovalPolicy,
+      sandbox::{NetworkAccess, SandboxMode},
+    },
+  };
   use std::{
     fs,
     path::PathBuf,
@@ -484,6 +728,23 @@ mod tests {
   }
 
   #[test]
+  fn resolves_the_global_execution_policy() -> () {
+    let path = create_config(
+      "[execution]\nsandbox = \"workspace-write\"\nnetwork = \"denied\"\napproval_policy = \"on-request\"\n",
+    );
+    let policy = resolve_execution_policy(&path, ExecutionOverrides::none())
+      .expect("the execution policy should resolve");
+
+    fs::remove_file(&path).expect("the configuration should be removed");
+
+    assert_eq!(policy.sandbox_mode(), SandboxMode::WorkspaceWrite);
+    assert_eq!(policy.network_access(), NetworkAccess::Denied);
+    assert_eq!(policy.approval_policy(), ApprovalPolicy::OnRequest);
+
+    return;
+  }
+
+  #[test]
   fn rejects_a_selection_without_a_model() -> () {
     let path =
       create_config("[profiles.default]\nprovider = \"codex\"\nreasoning_effort = \"medium\"\n");
@@ -512,16 +773,26 @@ mod tests {
       "medium".to_owned(),
     )
     .expect("the reasoning effort should be saved");
+    set(&path, "execution.sandbox", "workspace-write".to_owned())
+      .expect("the sandbox should be saved");
+    set(&path, "execution.network", "denied".to_owned())
+      .expect("the network access should be saved");
+    set(&path, "execution.approval_policy", "on-request".to_owned())
+      .expect("the approval policy should be saved");
     let model = get(&path, "profiles.default.model")
       .expect("the model should be read")
       .expect("the model should exist");
     let removed = unset(&path, "profiles.default.reasoning_effort")
       .expect("the reasoning effort should be removed");
+    let sandbox = get(&path, "execution.sandbox")
+      .expect("the sandbox should be read")
+      .expect("the sandbox should exist");
 
     fs::remove_dir_all(path.parent().expect("the path should have a parent"))
       .expect("the configuration directory should be removed");
 
     assert_eq!(model, "gpt-6.1-sol");
+    assert_eq!(sandbox, "workspace-write");
     assert!(removed);
 
     return;

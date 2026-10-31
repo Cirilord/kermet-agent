@@ -13,10 +13,54 @@ pub enum SandboxMode {
   DangerFullAccess,
 }
 
+impl SandboxMode {
+  pub fn identifier(&self) -> &'static str {
+    let identifier = match *self {
+      Self::ReadOnly => "read-only",
+      Self::WorkspaceWrite => "workspace-write",
+      Self::DangerFullAccess => "danger-full-access",
+    };
+
+    return identifier;
+  }
+
+  pub fn from_identifier(value: &str) -> Option<Self> {
+    let mode = match value {
+      "read-only" => Some(Self::ReadOnly),
+      "workspace-write" => Some(Self::WorkspaceWrite),
+      "danger-full-access" => Some(Self::DangerFullAccess),
+      _ => None,
+    };
+
+    return mode;
+  }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NetworkAccess {
   Denied,
   Allowed,
+}
+
+impl NetworkAccess {
+  pub fn identifier(&self) -> &'static str {
+    let identifier = match *self {
+      Self::Denied => "denied",
+      Self::Allowed => "allowed",
+    };
+
+    return identifier;
+  }
+
+  pub fn from_identifier(value: &str) -> Option<Self> {
+    let access = match value {
+      "denied" => Some(Self::Denied),
+      "allowed" => Some(Self::Allowed),
+      _ => None,
+    };
+
+    return access;
+  }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
