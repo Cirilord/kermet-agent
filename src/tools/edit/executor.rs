@@ -2,7 +2,10 @@ use super::{EditOutput, EditRequest, request::MAX_CONTENT_BYTES};
 use crate::{
   agent::TaskRequest,
   ids::IdGenerator,
-  security::{Capability, PermissionDenied, PermissionManager},
+  security::{
+    AuthorizationError, AuthorizationManager, ExecutionRequirement,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
 };
 use std::{
   fs::OpenOptions,
@@ -14,20 +17,22 @@ const MAX_TEMPORARY_PATH_ATTEMPTS: usize = 16;
 
 #[derive(Debug)]
 pub struct Edit {
-  permission_manager: PermissionManager,
+  authorization_manager: AuthorizationManager,
 }
 
 impl Edit {
-  pub fn new(permission_manager: PermissionManager) -> Self {
-    return Self { permission_manager };
+  pub fn new(authorization_manager: AuthorizationManager) -> Self {
+    return Self {
+      authorization_manager,
+    };
   }
 
   pub fn execute(&self, task: &TaskRequest, request: EditRequest) -> Result<EditOutput, EditError> {
-    if let Err(error) = self
-      .permission_manager
-      .authorize(task.permission_mode(), Capability::WriteFile)
-    {
-      return Err(EditError::PermissionDenied(error));
+    if let Err(error) = self.authorization_manager.authorize(
+      &task.execution_policy(),
+      ExecutionRequirement::new(SandboxMode::WorkspaceWrite, NetworkAccess::Denied),
+    ) {
+      return Err(EditError::Authorization(error));
     }
     let path = match resolve_target_path(task.workspace().path(), request.path()) {
       Ok(path) => path,
@@ -72,7 +77,7 @@ impl Edit {
 
 #[derive(Debug)]
 pub enum EditError {
-  PermissionDenied(PermissionDenied),
+  Authorization(AuthorizationError),
   MissingFileName(PathBuf),
   CanonicalizeParent {
     path: PathBuf,

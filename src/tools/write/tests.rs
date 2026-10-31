@@ -1,7 +1,10 @@
 use super::{Write, WriteError, WriteRequest, WriteRequestError};
 use crate::{
-  agent::{PermissionMode, TaskRequest},
-  security::PermissionManager,
+  agent::TaskRequest,
+  security::{
+    ApprovalPolicy, AuthorizationManager, ExecutionPolicy,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
   workspace::Workspace,
 };
 use std::{
@@ -14,10 +17,10 @@ use std::{
 fn writes_a_new_file_inside_the_workspace() -> () {
   let workspace_path = unique_path("new-file");
   fs::create_dir(&workspace_path).expect("the workspace should be created");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = WriteRequest::new(PathBuf::from("notes.txt"), "Kermet".to_owned())
     .expect("the request should be valid");
-  let output = Write::new(PermissionManager::new())
+  let output = Write::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect("the file should be written");
 
@@ -37,11 +40,11 @@ fn replaces_an_existing_file() -> () {
   let workspace_path = unique_path("replace-file");
   fs::create_dir(&workspace_path).expect("the workspace should be created");
   fs::write(workspace_path.join("notes.txt"), "old").expect("the fixture should be written");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = WriteRequest::new(PathBuf::from("notes.txt"), "new".to_owned())
     .expect("the request should be valid");
 
-  Write::new(PermissionManager::new())
+  Write::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect("the file should be replaced");
 
@@ -59,10 +62,10 @@ fn rejects_a_path_outside_the_workspace() -> () {
   let root = unique_path("outside-workspace");
   let workspace_path = root.join("workspace");
   fs::create_dir_all(&workspace_path).expect("the workspace should be created");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = WriteRequest::new(PathBuf::from("../outside.txt"), "outside".to_owned())
     .expect("the request should be valid");
-  let error = Write::new(PermissionManager::new())
+  let error = Write::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the path should be rejected");
 
@@ -83,10 +86,10 @@ fn rejects_a_parent_symlink_that_escapes_the_workspace() -> () {
   fs::create_dir_all(&workspace_path).expect("the workspace should be created");
   fs::create_dir(&outside_path).expect("the outside directory should be created");
   symlink(&outside_path, workspace_path.join("escape")).expect("the symlink should be created");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = WriteRequest::new(PathBuf::from("escape/notes.txt"), "outside".to_owned())
     .expect("the request should be valid");
-  let error = Write::new(PermissionManager::new())
+  let error = Write::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the path should be rejected");
 
@@ -107,10 +110,10 @@ fn rejects_a_target_symlink_that_escapes_the_workspace() -> () {
   fs::create_dir_all(&workspace_path).expect("the workspace should be created");
   fs::write(&outside_path, "outside").expect("the outside file should be written");
   symlink(&outside_path, workspace_path.join("escape.txt")).expect("the symlink should be created");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = WriteRequest::new(PathBuf::from("escape.txt"), "unsafe".to_owned())
     .expect("the request should be valid");
-  let error = Write::new(PermissionManager::new())
+  let error = Write::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the path should be rejected");
 
@@ -128,14 +131,14 @@ fn rejects_a_target_symlink_that_escapes_the_workspace() -> () {
 fn denies_writes_in_read_only_mode() -> () {
   let workspace_path = unique_path("permission");
   fs::create_dir(&workspace_path).expect("the workspace should be created");
-  let task = task(&workspace_path, PermissionMode::ReadOnly);
+  let task = task(&workspace_path, SandboxMode::ReadOnly);
   let request = WriteRequest::new(PathBuf::from("notes.txt"), "denied".to_owned())
     .expect("the request should be valid");
-  let error = Write::new(PermissionManager::new())
+  let error = Write::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the write should be denied");
 
-  assert!(matches!(error, WriteError::PermissionDenied(_)));
+  assert!(matches!(error, WriteError::Authorization(_)));
   fs::remove_dir_all(&workspace_path).expect("the workspace should be removed");
 
   return;
@@ -162,15 +165,20 @@ fn rejects_content_larger_than_the_limit() -> () {
   return;
 }
 
-fn task(workspace_path: &std::path::Path, permission_mode: PermissionMode) -> TaskRequest {
+fn task(workspace_path: &std::path::Path, sandbox_mode: SandboxMode) -> TaskRequest {
   let workspace = Workspace::new(
     fs::canonicalize(workspace_path).expect("the workspace should be canonical"),
     false,
   );
-  let task = TaskRequest::new("write file".to_owned(), workspace, permission_mode)
+  let task = TaskRequest::new("write file".to_owned(), workspace, policy(sandbox_mode))
     .expect("the task should be valid");
 
   return task;
+}
+
+fn policy(sandbox_mode: SandboxMode) -> ExecutionPolicy {
+  return ExecutionPolicy::new(sandbox_mode, NetworkAccess::Denied, ApprovalPolicy::Never)
+    .expect("the policy should be valid");
 }
 
 fn unique_path(kind: &str) -> PathBuf {

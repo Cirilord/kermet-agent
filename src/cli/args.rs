@@ -1,4 +1,10 @@
-use crate::{agent::PermissionMode, models::ReasoningEffort};
+use crate::{
+  models::ReasoningEffort,
+  security::{
+    ApprovalPolicy,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
+};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
@@ -42,9 +48,15 @@ pub struct RunArgs {
   /// Workspace in which the task will run.
   #[arg(long, default_value = ".")]
   pub workspace: PathBuf,
-  /// Maximum permission mode available to the task.
-  #[arg(long, value_enum, default_value_t = CliPermissionMode::ReadOnly)]
-  pub mode: CliPermissionMode,
+  /// Filesystem boundary for tool execution.
+  #[arg(long, value_enum, default_value_t = CliSandboxMode::ReadOnly)]
+  pub sandbox: CliSandboxMode,
+  /// Network access available to tool execution.
+  #[arg(long, value_enum, default_value_t = CliNetworkAccess::Denied)]
+  pub network: CliNetworkAccess,
+  /// How Kermet handles actions outside the execution policy.
+  #[arg(long, value_enum, default_value_t = CliApprovalPolicy::OnRequest)]
+  pub approval_policy: CliApprovalPolicy,
   /// Configuration profile that selects the provider and model.
   #[arg(long, default_value = "default")]
   pub profile: String,
@@ -145,10 +157,22 @@ pub enum Command {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-pub enum CliPermissionMode {
+pub enum CliSandboxMode {
   ReadOnly,
   WorkspaceWrite,
-  ExpandedAccess,
+  DangerFullAccess,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum CliNetworkAccess {
+  Denied,
+  Allowed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum CliApprovalPolicy {
+  OnRequest,
+  Never,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -179,21 +203,45 @@ impl From<CliReasoningEffort> for ReasoningEffort {
   }
 }
 
-impl From<CliPermissionMode> for PermissionMode {
-  fn from(mode: CliPermissionMode) -> Self {
-    let permission_mode = match mode {
-      CliPermissionMode::ReadOnly => Self::ReadOnly,
-      CliPermissionMode::WorkspaceWrite => Self::WorkspaceWrite,
-      CliPermissionMode::ExpandedAccess => Self::ExpandedAccess,
+impl From<CliSandboxMode> for SandboxMode {
+  fn from(mode: CliSandboxMode) -> Self {
+    let sandbox_mode = match mode {
+      CliSandboxMode::ReadOnly => Self::ReadOnly,
+      CliSandboxMode::WorkspaceWrite => Self::WorkspaceWrite,
+      CliSandboxMode::DangerFullAccess => Self::DangerFullAccess,
     };
 
-    return permission_mode;
+    return sandbox_mode;
+  }
+}
+
+impl From<CliNetworkAccess> for NetworkAccess {
+  fn from(access: CliNetworkAccess) -> Self {
+    let network_access = match access {
+      CliNetworkAccess::Denied => Self::Denied,
+      CliNetworkAccess::Allowed => Self::Allowed,
+    };
+
+    return network_access;
+  }
+}
+
+impl From<CliApprovalPolicy> for ApprovalPolicy {
+  fn from(policy: CliApprovalPolicy) -> Self {
+    let approval_policy = match policy {
+      CliApprovalPolicy::OnRequest => Self::OnRequest,
+      CliApprovalPolicy::Never => Self::Never,
+    };
+
+    return approval_policy;
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::{Cli, CliPermissionMode, Command, ConfigCommand, LoginCommand};
+  use super::{
+    Cli, CliApprovalPolicy, CliNetworkAccess, CliSandboxMode, Command, ConfigCommand, LoginCommand,
+  };
   use clap::Parser;
 
   #[test]
@@ -204,8 +252,12 @@ mod tests {
       "inspect the authentication flow",
       "--workspace",
       "./workspace",
-      "--mode",
+      "--sandbox",
       "workspace-write",
+      "--network",
+      "denied",
+      "--approval-policy",
+      "on-request",
     ])
     .expect("the command-line arguments should parse");
 
@@ -218,7 +270,9 @@ mod tests {
       Some("inspect the authentication flow")
     );
     assert_eq!(arguments.workspace, std::path::PathBuf::from("./workspace"));
-    assert_eq!(arguments.mode, CliPermissionMode::WorkspaceWrite);
+    assert_eq!(arguments.sandbox, CliSandboxMode::WorkspaceWrite);
+    assert_eq!(arguments.network, CliNetworkAccess::Denied);
+    assert_eq!(arguments.approval_policy, CliApprovalPolicy::OnRequest);
 
     return;
   }

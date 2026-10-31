@@ -1,6 +1,6 @@
 use crate::{
   agent::TaskRequest,
-  security::PermissionManager,
+  security::AuthorizationManager,
   tools::{
     Bash, BashError, BashOutput, BashRequest, Edit, EditError, EditOutput, EditRequest, Read,
     ReadError, ReadOutput, ReadRequest, Write, WriteError, WriteOutput, WriteRequest,
@@ -15,12 +15,12 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
-  pub fn new(permission_manager: PermissionManager) -> Self {
+  pub fn new(authorization_manager: AuthorizationManager) -> Self {
     return Self {
-      bash: Bash::new(permission_manager.clone()),
-      edit: Edit::new(permission_manager.clone()),
-      read: Read::new(permission_manager.clone()),
-      write: Write::new(permission_manager),
+      bash: Bash::new(authorization_manager.clone()),
+      edit: Edit::new(authorization_manager.clone()),
+      read: Read::new(authorization_manager.clone()),
+      write: Write::new(authorization_manager),
     };
   }
 

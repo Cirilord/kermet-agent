@@ -2,7 +2,10 @@ use super::{WriteOutput, WriteRequest};
 use crate::{
   agent::TaskRequest,
   ids::IdGenerator,
-  security::{Capability, PermissionDenied, PermissionManager},
+  security::{
+    AuthorizationError, AuthorizationManager, ExecutionRequirement,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
 };
 use std::{
   fs::OpenOptions,
@@ -14,12 +17,14 @@ const MAX_TEMPORARY_PATH_ATTEMPTS: usize = 16;
 
 #[derive(Debug)]
 pub struct Write {
-  permission_manager: PermissionManager,
+  authorization_manager: AuthorizationManager,
 }
 
 impl Write {
-  pub fn new(permission_manager: PermissionManager) -> Self {
-    return Self { permission_manager };
+  pub fn new(authorization_manager: AuthorizationManager) -> Self {
+    return Self {
+      authorization_manager,
+    };
   }
 
   pub fn execute(
@@ -27,11 +32,11 @@ impl Write {
     task: &TaskRequest,
     request: WriteRequest,
   ) -> Result<WriteOutput, WriteError> {
-    if let Err(error) = self
-      .permission_manager
-      .authorize(task.permission_mode(), Capability::WriteFile)
-    {
-      return Err(WriteError::PermissionDenied(error));
+    if let Err(error) = self.authorization_manager.authorize(
+      &task.execution_policy(),
+      ExecutionRequirement::new(SandboxMode::WorkspaceWrite, NetworkAccess::Denied),
+    ) {
+      return Err(WriteError::Authorization(error));
     }
     let path = match resolve_target_path(task.workspace().path(), request.path()) {
       Ok(path) => path,
@@ -54,7 +59,7 @@ impl Write {
 
 #[derive(Debug)]
 pub enum WriteError {
-  PermissionDenied(PermissionDenied),
+  Authorization(AuthorizationError),
   MissingFileName(PathBuf),
   CanonicalizeParent {
     path: PathBuf,

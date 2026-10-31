@@ -1,7 +1,10 @@
 use super::{Bash, BashError, BashRequest, BashRequestError};
 use crate::{
-  agent::{PermissionMode, TaskRequest},
-  security::PermissionManager,
+  agent::TaskRequest,
+  security::{
+    ApprovalPolicy, AuthorizationManager, ExecutionPolicy,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
   workspace::Workspace,
 };
 use std::{
@@ -23,23 +26,23 @@ fn rejects_an_empty_command() -> () {
 
 #[test]
 fn denies_execution_without_expanded_access() -> () {
-  let task = task(PermissionMode::WorkspaceWrite);
+  let task = task(SandboxMode::WorkspaceWrite);
   let request = BashRequest::new("printf denied".to_owned()).expect("the request should be valid");
-  let error = Bash::new(PermissionManager::new())
+  let error = Bash::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the permission should be denied");
 
-  assert!(matches!(error, BashError::PermissionDenied(_)));
+  assert!(matches!(error, BashError::Authorization(_)));
 
   return;
 }
 
 #[test]
 fn runs_a_command_in_the_workspace() -> () {
-  let task = task(PermissionMode::ExpandedAccess);
+  let task = task(SandboxMode::DangerFullAccess);
   let request =
     BashRequest::new("printf '%s' \"$PWD\"".to_owned()).expect("the request should be valid");
-  let output = Bash::new(PermissionManager::new())
+  let output = Bash::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect("the command should run");
 
@@ -56,10 +59,10 @@ fn runs_a_command_in_the_workspace() -> () {
 
 #[test]
 fn preserves_a_nonzero_exit_code_and_standard_error() -> () {
-  let task = task(PermissionMode::ExpandedAccess);
+  let task = task(SandboxMode::DangerFullAccess);
   let request =
     BashRequest::new("printf failure >&2; exit 7".to_owned()).expect("the request should be valid");
-  let output = Bash::new(PermissionManager::new())
+  let output = Bash::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect("the process result should be captured");
 
@@ -71,10 +74,10 @@ fn preserves_a_nonzero_exit_code_and_standard_error() -> () {
 
 #[test]
 fn truncates_large_standard_output() -> () {
-  let task = task(PermissionMode::ExpandedAccess);
+  let task = task(SandboxMode::DangerFullAccess);
   let request =
     BashRequest::new("printf 'x%.0s' {1..40000}".to_owned()).expect("the request should be valid");
-  let output = Bash::new(PermissionManager::new())
+  let output = Bash::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect("the process result should be captured");
 
@@ -86,9 +89,9 @@ fn truncates_large_standard_output() -> () {
 
 #[test]
 fn kills_a_command_that_exceeds_its_timeout() -> () {
-  let task = task(PermissionMode::ExpandedAccess);
+  let task = task(SandboxMode::DangerFullAccess);
   let request = BashRequest::new("sleep 1".to_owned()).expect("the request should be valid");
-  let output = Bash::with_timeout(PermissionManager::new(), Duration::from_millis(20))
+  let output = Bash::with_timeout(AuthorizationManager::new(), Duration::from_millis(20))
     .execute(&task, request)
     .expect("the timed out process should be captured");
 
@@ -97,7 +100,7 @@ fn kills_a_command_that_exceeds_its_timeout() -> () {
   return;
 }
 
-fn task(permission_mode: PermissionMode) -> TaskRequest {
+fn task(sandbox_mode: SandboxMode) -> TaskRequest {
   let timestamp = SystemTime::now()
     .duration_since(UNIX_EPOCH)
     .expect("the clock should be valid")
@@ -112,8 +115,18 @@ fn task(permission_mode: PermissionMode) -> TaskRequest {
     fs::canonicalize(&workspace_path).expect("the fixture should be canonical"),
     false,
   );
-  let request = TaskRequest::new("run a command".to_owned(), workspace, permission_mode)
+  let request = TaskRequest::new("run a command".to_owned(), workspace, policy(sandbox_mode))
     .expect("the task should be valid");
 
   return request;
+}
+
+fn policy(sandbox_mode: SandboxMode) -> ExecutionPolicy {
+  let network_access = match sandbox_mode {
+    SandboxMode::DangerFullAccess => NetworkAccess::Allowed,
+    SandboxMode::ReadOnly | SandboxMode::WorkspaceWrite => NetworkAccess::Denied,
+  };
+
+  return ExecutionPolicy::new(sandbox_mode, network_access, ApprovalPolicy::Never)
+    .expect("the policy should be valid");
 }

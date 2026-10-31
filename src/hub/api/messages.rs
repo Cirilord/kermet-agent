@@ -11,6 +11,10 @@ use super::super::controllers::HubState;
 use crate::{
   agent::{AgentEvent, TaskRequest},
   config::{ModelOverrides, resolve_model_selection, user_path},
+  security::{
+    ApprovalPolicy, ExecutionPolicy,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
   turn::execute_turn,
   workspace::Workspace,
 };
@@ -88,7 +92,14 @@ fn start_turn(state: HubState, thread: crate::thread::Thread, message: String) -
         return;
       }
     };
-    let request = match TaskRequest::new(message, workspace, permission_mode()) {
+    let execution_policy = match execution_policy() {
+      Ok(policy) => policy,
+      Err(_) => {
+        state_for_turn.publish(&thread_id, "failed", "policy".to_owned());
+        return;
+      }
+    };
+    let request = match TaskRequest::new(message, workspace, execution_policy) {
       Ok(request) => request,
       Err(_) => {
         state_for_turn.publish(&thread_id, "failed", "request".to_owned());
@@ -135,8 +146,14 @@ fn start_turn(state: HubState, thread: crate::thread::Thread, message: String) -
   return;
 }
 
-fn permission_mode() -> crate::agent::PermissionMode {
-  return crate::agent::PermissionMode::ExpandedAccess;
+fn execution_policy() -> Result<ExecutionPolicy, crate::security::ExecutionPolicyError> {
+  let policy = ExecutionPolicy::new(
+    SandboxMode::DangerFullAccess,
+    NetworkAccess::Allowed,
+    ApprovalPolicy::Never,
+  );
+
+  return policy;
 }
 
 fn open_workspace(path: PathBuf) -> Result<Workspace, ()> {
@@ -156,12 +173,21 @@ fn open_workspace(path: PathBuf) -> Result<Workspace, ()> {
 
 #[cfg(test)]
 mod tests {
-  use super::permission_mode;
-  use crate::agent::PermissionMode;
+  use super::execution_policy;
+  use crate::security::{
+    ApprovalPolicy, ExecutionPolicy,
+    sandbox::{NetworkAccess, SandboxMode},
+  };
 
   #[test]
-  fn enables_expanded_access_for_hub_turns() -> () {
-    assert_eq!(permission_mode(), PermissionMode::ExpandedAccess);
+  fn enables_full_access_for_hub_turns() -> () {
+    let expected = ExecutionPolicy::new(
+      SandboxMode::DangerFullAccess,
+      NetworkAccess::Allowed,
+      ApprovalPolicy::Never,
+    );
+
+    assert_eq!(execution_policy(), expected);
 
     return;
   }

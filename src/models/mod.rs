@@ -130,19 +130,32 @@ pub enum ModelProviderError {
 mod tests {
   use super::{ModelRequest, ModelToolCall};
   use crate::{
-    agent::{PermissionMode, TaskRequest},
+    agent::TaskRequest,
     models::{ModelSelection, ReasoningEffort},
+    security::{
+      ApprovalPolicy, ExecutionPolicy,
+      sandbox::{NetworkAccess, SandboxMode},
+    },
     tools::{ReadRequest, ToolOutput, ToolRequest},
     workspace::Workspace,
   };
   use std::path::PathBuf;
+
+  fn test_policy() -> ExecutionPolicy {
+    return ExecutionPolicy::new(
+      SandboxMode::ReadOnly,
+      NetworkAccess::Denied,
+      ApprovalPolicy::Never,
+    )
+    .expect("the policy should be valid");
+  }
 
   #[test]
   fn preserves_all_tool_results_for_the_next_provider_request() -> () {
     let task = TaskRequest::new(
       "inspect the project".to_owned(),
       Workspace::new(PathBuf::from("/workspace"), false),
-      PermissionMode::ReadOnly,
+      test_policy(),
     )
     .expect("the task should be valid");
     let selection = ModelSelection::new(

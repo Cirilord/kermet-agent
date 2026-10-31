@@ -429,9 +429,13 @@ fn parse_line_number(value: &Value) -> Result<usize, ModelProviderError> {
 mod tests {
   use super::{CodexProvider, parse_sse, parse_sse_line};
   use crate::{
-    agent::{PermissionMode, TaskRequest},
+    agent::TaskRequest,
     models::{
       ModelEvent, ModelRequest, ModelResponse, ModelSelection, ModelToolCall, ReasoningEffort,
+    },
+    security::{
+      ApprovalPolicy, ExecutionPolicy,
+      sandbox::{NetworkAccess, SandboxMode},
     },
     tools::{ReadRequest, ToolOutput, ToolRequest},
     workspace::Workspace,
@@ -439,12 +443,21 @@ mod tests {
   use serde_json::Value;
   use std::path::PathBuf;
 
+  fn test_policy() -> ExecutionPolicy {
+    return ExecutionPolicy::new(
+      SandboxMode::ReadOnly,
+      NetworkAccess::Denied,
+      ApprovalPolicy::Never,
+    )
+    .expect("the policy should be valid");
+  }
+
   #[test]
   fn sends_all_prior_tool_results_in_a_continuation_request() -> () {
     let task = TaskRequest::new(
       "inspect the project".to_owned(),
       Workspace::new(PathBuf::from("/workspace"), false),
-      PermissionMode::ReadOnly,
+      test_policy(),
     )
     .expect("the task should be valid");
     let selection = ModelSelection::new(

@@ -2,4 +2,4 @@ mod r#loop;
 mod task;
 
 pub use r#loop::{AgentEvent, AgentLoop, AgentLoopError, AgentResult};
-pub use task::{PermissionMode, TaskRequest, TaskRequestError};
+pub use task::{TaskRequest, TaskRequestError};

@@ -1,7 +1,10 @@
 use super::{Read, ReadError, ReadRequest};
 use crate::{
-  agent::{PermissionMode, TaskRequest},
-  security::PermissionManager,
+  agent::TaskRequest,
+  security::{
+    ApprovalPolicy, AuthorizationManager, ExecutionPolicy,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
   workspace::Workspace,
 };
 use std::{
@@ -16,7 +19,7 @@ fn reads_a_file_inside_the_workspace() -> () {
   fs::create_dir(&workspace_path).expect("the workspace should be created");
   fs::write(workspace_path.join("notes.txt"), "Kermet").expect("the file should be written");
   let task = task(&workspace_path);
-  let output = Read::new(PermissionManager::new())
+  let output = Read::new(AuthorizationManager::new())
     .execute(&task, ReadRequest::new(PathBuf::from("notes.txt")))
     .expect("the file should be read");
 
@@ -33,7 +36,7 @@ fn rejects_a_path_outside_the_workspace() -> () {
   fs::create_dir_all(&workspace_path).expect("the workspace should be created");
   fs::write(root.join("outside.txt"), "outside").expect("the outside file should be written");
   let task = task(&workspace_path);
-  let error = Read::new(PermissionManager::new())
+  let error = Read::new(AuthorizationManager::new())
     .execute(&task, ReadRequest::new(PathBuf::from("../outside.txt")))
     .expect_err("the path should be rejected");
 
@@ -52,7 +55,7 @@ fn reads_only_the_requested_lines() -> () {
   let task = task(&workspace_path);
   let request = ReadRequest::with_line_range(PathBuf::from("notes.txt"), 2, 3)
     .expect("the range should be valid");
-  let output = Read::new(PermissionManager::new())
+  let output = Read::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect("the file should be read");
 
@@ -67,7 +70,7 @@ fn rejects_a_missing_file() -> () {
   let workspace_path = unique_path("missing");
   fs::create_dir(&workspace_path).expect("the workspace should be created");
   let task = task(&workspace_path);
-  let error = Read::new(PermissionManager::new())
+  let error = Read::new(AuthorizationManager::new())
     .execute(&task, ReadRequest::new(PathBuf::from("missing.txt")))
     .expect_err("the file should be missing");
 
@@ -89,7 +92,7 @@ fn rejects_a_symlink_that_escapes_the_workspace() -> () {
   fs::write(&outside_path, "outside").expect("the outside file should be written");
   symlink(&outside_path, workspace_path.join("escape.txt")).expect("the symlink should be created");
   let task = task(&workspace_path);
-  let error = Read::new(PermissionManager::new())
+  let error = Read::new(AuthorizationManager::new())
     .execute(&task, ReadRequest::new(PathBuf::from("escape.txt")))
     .expect_err("the symlink should be rejected");
 
@@ -104,10 +107,19 @@ fn task(workspace_path: &std::path::Path) -> TaskRequest {
     fs::canonicalize(workspace_path).expect("the workspace should be canonical"),
     false,
   );
-  let task = TaskRequest::new("read file".to_owned(), workspace, PermissionMode::ReadOnly)
+  let task = TaskRequest::new("read file".to_owned(), workspace, policy())
     .expect("the task should be valid");
 
   return task;
+}
+
+fn policy() -> ExecutionPolicy {
+  return ExecutionPolicy::new(
+    SandboxMode::ReadOnly,
+    NetworkAccess::Denied,
+    ApprovalPolicy::Never,
+  )
+  .expect("the policy should be valid");
 }
 
 fn unique_path(kind: &str) -> PathBuf {

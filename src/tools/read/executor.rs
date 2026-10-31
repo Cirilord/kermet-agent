@@ -1,7 +1,10 @@
 use super::{ReadOutput, ReadRequest};
 use crate::{
   agent::TaskRequest,
-  security::{Capability, PermissionDenied, PermissionManager},
+  security::{
+    AuthorizationError, AuthorizationManager, ExecutionRequirement,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
 };
 use std::{
   fs::File,
@@ -13,20 +16,22 @@ const MAX_FILE_BYTES: u64 = 256 * 1024;
 
 #[derive(Debug)]
 pub struct Read {
-  permission_manager: PermissionManager,
+  authorization_manager: AuthorizationManager,
 }
 
 impl Read {
-  pub fn new(permission_manager: PermissionManager) -> Self {
-    return Self { permission_manager };
+  pub fn new(authorization_manager: AuthorizationManager) -> Self {
+    return Self {
+      authorization_manager,
+    };
   }
 
   pub fn execute(&self, task: &TaskRequest, request: ReadRequest) -> Result<ReadOutput, ReadError> {
-    if let Err(error) = self
-      .permission_manager
-      .authorize(task.permission_mode(), Capability::ReadFile)
-    {
-      return Err(ReadError::PermissionDenied(error));
+    if let Err(error) = self.authorization_manager.authorize(
+      &task.execution_policy(),
+      ExecutionRequirement::new(SandboxMode::ReadOnly, NetworkAccess::Denied),
+    ) {
+      return Err(ReadError::Authorization(error));
     }
 
     let path = match resolve_path(task.workspace().path(), request.path()) {
@@ -73,7 +78,7 @@ impl Read {
 
 #[derive(Debug)]
 pub enum ReadError {
-  PermissionDenied(PermissionDenied),
+  Authorization(AuthorizationError),
   Canonicalize {
     path: PathBuf,
     source: std::io::Error,

@@ -10,13 +10,13 @@
 
 The CLI parses user input and validates the workspace before constructing a typed request for the runtime. It does not contain agent behavior, provider logic, permission decisions, or tool execution.
 
-The initial commands are `doctor`, `hub`, `run`, `login`, `logout`, and `config`. `doctor` reports deterministic local state. `hub` serves server-rendered views of persisted threads on the loopback interface. Its workspace-picker route starts a restricted internal picker process with a hidden flag, validates and persists the selected workspace, and requires session, exact-origin, and CSRF checks. The Hub persists a new thread and its first user message, opens its Server-Sent Events stream, then starts the initial turn. Later messages use the same persisted thread and turn boundary. Hub turns currently use `expanded-access` to test Bash before sandboxing exists. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. `config` manages non-secret model profiles. `run` resolves a typed provider, model, and reasoning-effort selection before constructing the runtime request; it fails when any selection value is missing. `run --interactive` persists a thread and reuses the same typed request and agent loop for each turn.
+The initial commands are `doctor`, `hub`, `run`, `login`, `logout`, and `config`. `doctor` reports deterministic local state. `hub` serves server-rendered views of persisted threads on the loopback interface. Its workspace-picker route starts a restricted internal picker process with a hidden flag, validates and persists the selected workspace, and requires session, exact-origin, and CSRF checks. The Hub persists a new thread and its first user message, opens its Server-Sent Events stream, then starts the initial turn. Later messages use the same persisted thread and turn boundary. Hub turns currently use `danger-full-access` with network allowed to test Bash before sandboxing exists. `login` coordinates provider authentication and writes credentials through the credential-store boundary; `login status` reads that boundary without exposing secrets. `logout` removes the selected credential profile. `config` manages non-secret model profiles. `run` resolves a typed provider, model, and reasoning-effort selection before constructing the runtime request; it fails when any selection value is missing. `run --interactive` persists a thread and reuses the same typed request and agent loop for each turn.
 
 The Hub keeps session authorization, request limits, and response protections in `src/hub/security/`. Its server module composes those boundaries with routes; server-rendered page controllers live in `src/hub/controllers/`, JSON endpoints live in `src/hub/api/`, and views do not make security decisions.
 
 ## Task request
 
-`TaskRequest` is the typed boundary between the CLI and agent core. It contains a non-empty task, a validated workspace, and the requested permission mode. It carries domain data only: Clap types, provider configuration, and tool execution stay outside it. `ExecutionPolicy` is the staged replacement for the permission mode and will become this boundary after its authorization flow is implemented.
+`TaskRequest` is the typed boundary between the CLI and agent core. It contains a non-empty task, a validated workspace, and an `ExecutionPolicy`. It carries domain data only: Clap types, provider configuration, and tool execution stay outside it.
 
 ## Workspace catalog
 
@@ -29,8 +29,8 @@ The Hub keeps session authorization, request limits, and response protections in
 | Agent core | Runs an explicit, observable state machine for a task. |
 | Provider registry | Resolves a configured provider through its credential boundary and returns a typed provider instance. |
 | Model provider | Translates provider-specific model and tool-calling protocols into internal types, preserving each accepted tool call's identifier and validated arguments for the continuation request. |
-| Tool registry | Defines, validates, and executes available tools. The initial Bash tool is gated by `expanded-access` and will adopt the shared sandbox runner after platform enforcement is implemented. |
-| Permission manager | Applies deterministic authorization policy before tool execution. |
+| Tool registry | Defines, validates, and executes available tools. The initial Bash tool requires `danger-full-access` with network allowed and will adopt the shared sandbox runner after platform enforcement is implemented. |
+| Authorization manager | Applies deterministic execution policy before tool execution. |
 | Sandbox runner | Defines the platform-independent policy, process request, resource limits, and execution contract. Its `core/` module owns those contracts, while `environments/` selects a native adapter for the current platform. macOS uses Seatbelt; unsupported platforms fail closed until a native adapter is available. |
 | Context manager | Selects the smallest useful context under a token budget. |
 | Codebase context | Indexes and retrieves files, symbols, relationships, and cached code ranges. |
@@ -43,7 +43,7 @@ Tools, permissions, validation, and providers must not be implicit dependencies 
 
 The model provider translates an accepted provider function call into a typed `ToolRequest`. The tool registry validates and executes that request locally. The agent loop retains every accepted call and bounded output for the current turn, and sends that ordered history back to the provider so the model can continue the same task without repeating completed inspection. A rejected or failed tool operation returns a generic failure result to the model; it does not expose internal errors or end the whole turn before the model can explain the outcome.
 
-Provider adapters validate external function-call payloads before creating domain requests. A provider payload cannot select an unavailable tool, add undeclared fields, or bypass the tool registry or permission manager.
+Provider adapters validate external function-call payloads before creating domain requests. A provider payload cannot select an unavailable tool, add undeclared fields, or bypass the tool registry or authorization manager.
 
 ## Runtime events
 

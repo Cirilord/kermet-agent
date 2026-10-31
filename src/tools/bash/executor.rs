@@ -1,7 +1,10 @@
 use super::{BashOutput, BashRequest};
 use crate::{
   agent::TaskRequest,
-  security::{Capability, PermissionDenied, PermissionManager},
+  security::{
+    AuthorizationError, AuthorizationManager, ExecutionRequirement,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
 };
 use std::{
   io::Read,
@@ -16,32 +19,35 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 #[derive(Debug)]
 pub struct Bash {
-  permission_manager: PermissionManager,
+  authorization_manager: AuthorizationManager,
   timeout: Duration,
 }
 
 impl Bash {
-  pub fn new(permission_manager: PermissionManager) -> Self {
+  pub fn new(authorization_manager: AuthorizationManager) -> Self {
     return Self {
-      permission_manager,
+      authorization_manager,
       timeout: DEFAULT_TIMEOUT,
     };
   }
 
   #[cfg(test)]
-  pub(super) fn with_timeout(permission_manager: PermissionManager, timeout: Duration) -> Self {
+  pub(super) fn with_timeout(
+    authorization_manager: AuthorizationManager,
+    timeout: Duration,
+  ) -> Self {
     return Self {
-      permission_manager,
+      authorization_manager,
       timeout,
     };
   }
 
   pub fn execute(&self, task: &TaskRequest, request: BashRequest) -> Result<BashOutput, BashError> {
-    if let Err(error) = self
-      .permission_manager
-      .authorize(task.permission_mode(), Capability::ExecuteProcess)
-    {
-      return Err(BashError::PermissionDenied(error));
+    if let Err(error) = self.authorization_manager.authorize(
+      &task.execution_policy(),
+      ExecutionRequirement::new(SandboxMode::DangerFullAccess, NetworkAccess::Allowed),
+    ) {
+      return Err(BashError::Authorization(error));
     }
 
     let path = std::env::var_os("PATH");
@@ -98,7 +104,7 @@ impl Bash {
 
 #[derive(Debug)]
 pub enum BashError {
-  PermissionDenied(PermissionDenied),
+  Authorization(AuthorizationError),
   Spawn(std::io::Error),
   MissingOutputStream,
   MissingErrorStream,

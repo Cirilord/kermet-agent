@@ -15,7 +15,7 @@ use crate::providers::codex::auth::{
   AuthorizationRequest, CodexCredentialStore, TokenClient, UreqTokenTransport,
   receive_authorization_code,
 };
-use crate::security::KeyringCredentialStore;
+use crate::security::{ExecutionPolicy, ExecutionPolicyError, KeyringCredentialStore};
 use crate::thread::{Thread, ThreadStore, ThreadStoreError};
 use crate::turn::{TurnError, execute_turn};
 use crate::utils::CallbackServer;
@@ -42,6 +42,12 @@ fn report_workspace_error(error: &WorkspaceError) -> () {
 }
 
 fn report_task_request_error(error: &TaskRequestError) -> () {
+  eprintln!("error: {error}");
+
+  return;
+}
+
+fn report_execution_policy_error(error: &ExecutionPolicyError) -> () {
   eprintln!("error: {error}");
 
   return;
@@ -317,6 +323,13 @@ fn run_task(arguments: RunArgs) -> ExitCode {
   if arguments.interactive {
     return run_interactive(arguments);
   }
+  let execution_policy = match execution_policy(&arguments) {
+    Ok(policy) => policy,
+    Err(error) => {
+      report_execution_policy_error(&error);
+      return ExitCode::from(INVALID_INPUT_EXIT_CODE);
+    }
+  };
   let task = match arguments.task {
     Some(task) => task,
     None => {
@@ -351,7 +364,7 @@ fn run_task(arguments: RunArgs) -> ExitCode {
       return ExitCode::from(INVALID_INPUT_EXIT_CODE);
     }
   };
-  let request = match TaskRequest::new(task, workspace, arguments.mode.into()) {
+  let request = match TaskRequest::new(task, workspace, execution_policy) {
     Ok(request) => request,
     Err(error) => {
       report_task_request_error(&error);
@@ -380,6 +393,13 @@ fn run_task(arguments: RunArgs) -> ExitCode {
 }
 
 fn run_interactive(arguments: RunArgs) -> ExitCode {
+  let execution_policy = match execution_policy(&arguments) {
+    Ok(policy) => policy,
+    Err(error) => {
+      report_execution_policy_error(&error);
+      return ExitCode::from(INVALID_INPUT_EXIT_CODE);
+    }
+  };
   let config_path = match user_path() {
     Ok(path) => path,
     Err(error) => {
@@ -489,7 +509,7 @@ fn run_interactive(arguments: RunArgs) -> ExitCode {
         return ExitCode::from(INVALID_INPUT_EXIT_CODE);
       }
     };
-    let request = match TaskRequest::new(prompt, workspace, arguments.mode.into()) {
+    let request = match TaskRequest::new(prompt, workspace, execution_policy) {
       Ok(request) => request,
       Err(error) => {
         report_task_request_error(&error);
@@ -515,6 +535,16 @@ fn run_interactive(arguments: RunArgs) -> ExitCode {
   }
 
   return ExitCode::SUCCESS;
+}
+
+fn execution_policy(arguments: &RunArgs) -> Result<ExecutionPolicy, ExecutionPolicyError> {
+  let policy = ExecutionPolicy::new(
+    arguments.sandbox.into(),
+    arguments.network.into(),
+    arguments.approval_policy.into(),
+  );
+
+  return policy;
 }
 
 fn login(arguments: LoginArgs) -> ExitCode {

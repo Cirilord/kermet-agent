@@ -1,7 +1,10 @@
 use super::{Edit, EditError, EditRequest, EditRequestError};
 use crate::{
-  agent::{PermissionMode, TaskRequest},
-  security::PermissionManager,
+  agent::TaskRequest,
+  security::{
+    ApprovalPolicy, AuthorizationManager, ExecutionPolicy,
+    sandbox::{NetworkAccess, SandboxMode},
+  },
   workspace::Workspace,
 };
 use std::{
@@ -16,14 +19,14 @@ fn replaces_one_exact_text_occurrence() -> () {
   fs::create_dir(&workspace_path).expect("the workspace should be created");
   fs::write(workspace_path.join("notes.txt"), "before target after")
     .expect("the fixture should be written");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = EditRequest::new(
     PathBuf::from("notes.txt"),
     "target".to_owned(),
     "replacement".to_owned(),
   )
   .expect("the request should be valid");
-  let output = Edit::new(PermissionManager::new())
+  let output = Edit::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect("the file should be edited");
 
@@ -43,14 +46,14 @@ fn rejects_missing_old_text() -> () {
   let workspace_path = unique_path("missing-text");
   fs::create_dir(&workspace_path).expect("the workspace should be created");
   fs::write(workspace_path.join("notes.txt"), "contents").expect("the fixture should be written");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = EditRequest::new(
     PathBuf::from("notes.txt"),
     "missing".to_owned(),
     "replacement".to_owned(),
   )
   .expect("the request should be valid");
-  let error = Edit::new(PermissionManager::new())
+  let error = Edit::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the edit should be rejected");
 
@@ -70,14 +73,14 @@ fn rejects_ambiguous_old_text() -> () {
   fs::create_dir(&workspace_path).expect("the workspace should be created");
   fs::write(workspace_path.join("notes.txt"), "target target")
     .expect("the fixture should be written");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = EditRequest::new(
     PathBuf::from("notes.txt"),
     "target".to_owned(),
     "replacement".to_owned(),
   )
   .expect("the request should be valid");
-  let error = Edit::new(PermissionManager::new())
+  let error = Edit::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the edit should be rejected");
 
@@ -106,18 +109,18 @@ fn denies_edits_in_read_only_mode() -> () {
   let workspace_path = unique_path("permission");
   fs::create_dir(&workspace_path).expect("the workspace should be created");
   fs::write(workspace_path.join("notes.txt"), "target").expect("the fixture should be written");
-  let task = task(&workspace_path, PermissionMode::ReadOnly);
+  let task = task(&workspace_path, SandboxMode::ReadOnly);
   let request = EditRequest::new(
     PathBuf::from("notes.txt"),
     "target".to_owned(),
     "replacement".to_owned(),
   )
   .expect("the request should be valid");
-  let error = Edit::new(PermissionManager::new())
+  let error = Edit::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the edit should be denied");
 
-  assert!(matches!(error, EditError::PermissionDenied(_)));
+  assert!(matches!(error, EditError::Authorization(_)));
   fs::remove_dir_all(&workspace_path).expect("the workspace should be removed");
 
   return;
@@ -134,14 +137,14 @@ fn rejects_a_symlink_that_escapes_the_workspace() -> () {
   fs::create_dir_all(&workspace_path).expect("the workspace should be created");
   fs::write(&outside_path, "target").expect("the outside file should be written");
   symlink(&outside_path, workspace_path.join("escape.txt")).expect("the symlink should be created");
-  let task = task(&workspace_path, PermissionMode::WorkspaceWrite);
+  let task = task(&workspace_path, SandboxMode::WorkspaceWrite);
   let request = EditRequest::new(
     PathBuf::from("escape.txt"),
     "target".to_owned(),
     "replacement".to_owned(),
   )
   .expect("the request should be valid");
-  let error = Edit::new(PermissionManager::new())
+  let error = Edit::new(AuthorizationManager::new())
     .execute(&task, request)
     .expect_err("the edit should be rejected");
 
@@ -155,15 +158,20 @@ fn rejects_a_symlink_that_escapes_the_workspace() -> () {
   return;
 }
 
-fn task(workspace_path: &std::path::Path, permission_mode: PermissionMode) -> TaskRequest {
+fn task(workspace_path: &std::path::Path, sandbox_mode: SandboxMode) -> TaskRequest {
   let workspace = Workspace::new(
     fs::canonicalize(workspace_path).expect("the workspace should be canonical"),
     false,
   );
-  let task = TaskRequest::new("edit file".to_owned(), workspace, permission_mode)
+  let task = TaskRequest::new("edit file".to_owned(), workspace, policy(sandbox_mode))
     .expect("the task should be valid");
 
   return task;
+}
+
+fn policy(sandbox_mode: SandboxMode) -> ExecutionPolicy {
+  return ExecutionPolicy::new(sandbox_mode, NetworkAccess::Denied, ApprovalPolicy::Never)
+    .expect("the policy should be valid");
 }
 
 fn unique_path(kind: &str) -> PathBuf {

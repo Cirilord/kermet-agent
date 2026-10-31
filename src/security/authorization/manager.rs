@@ -2,7 +2,10 @@ use super::super::{
   ApprovalPolicy, ExecutionPolicy,
   sandbox::{NetworkAccess, SandboxMode},
 };
-use super::{ApprovalRequest, AuthorizationDecision, AuthorizationDenied, ExecutionRequirement};
+use super::{
+  ApprovalRequest, AuthorizationDecision, AuthorizationDenied, AuthorizationError,
+  ExecutionRequirement,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct AuthorizationManager;
@@ -31,6 +34,22 @@ impl AuthorizationManager {
     };
 
     return decision;
+  }
+
+  pub fn authorize(
+    &self,
+    policy: &ExecutionPolicy,
+    requirement: ExecutionRequirement,
+  ) -> Result<(), AuthorizationError> {
+    let result = match self.evaluate(policy, requirement) {
+      AuthorizationDecision::Allowed => Ok(()),
+      AuthorizationDecision::RequiresApproval(request) => {
+        Err(AuthorizationError::ApprovalRequired(request))
+      }
+      AuthorizationDecision::Denied(denied) => Err(AuthorizationError::Denied(denied)),
+    };
+
+    return result;
   }
 }
 

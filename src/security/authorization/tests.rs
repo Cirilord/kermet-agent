@@ -2,7 +2,9 @@ use super::super::{
   ApprovalPolicy, ExecutionPolicy,
   sandbox::{NetworkAccess, SandboxMode},
 };
-use super::{AuthorizationDecision, AuthorizationManager, ExecutionRequirement};
+use super::{
+  AuthorizationDecision, AuthorizationError, AuthorizationManager, ExecutionRequirement,
+};
 
 #[test]
 fn allows_a_read_only_requirement_in_read_only_mode() -> () {
@@ -72,6 +74,21 @@ fn requests_approval_for_network_access_outside_the_active_policy() -> () {
   assert!(matches!(
     manager.evaluate(&policy, requirement),
     AuthorizationDecision::RequiresApproval(request) if request.requirement() == requirement
+  ));
+
+  return;
+}
+
+#[test]
+fn returns_a_typed_approval_error_when_authorization_is_required() -> () {
+  let manager = AuthorizationManager::new();
+  let policy = policy(SandboxMode::ReadOnly, ApprovalPolicy::OnRequest);
+  let requirement = requirement(SandboxMode::WorkspaceWrite, NetworkAccess::Denied);
+  let result = manager.authorize(&policy, requirement);
+
+  assert!(matches!(
+    result,
+    Err(AuthorizationError::ApprovalRequired(request)) if request.requirement() == requirement
   ));
 
   return;

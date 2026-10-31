@@ -1,37 +1,18 @@
-use crate::workspace::Workspace;
+use crate::{security::ExecutionPolicy, workspace::Workspace};
 use std::fmt::{Display, Formatter};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PermissionMode {
-  ReadOnly,
-  WorkspaceWrite,
-  ExpandedAccess,
-}
-
-impl Display for PermissionMode {
-  fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-    let value = match *self {
-      Self::ReadOnly => "read-only",
-      Self::WorkspaceWrite => "workspace-write",
-      Self::ExpandedAccess => "expanded-access",
-    };
-
-    return formatter.write_str(value);
-  }
-}
 
 #[derive(Debug)]
 pub struct TaskRequest {
   task: String,
   workspace: Workspace,
-  permission_mode: PermissionMode,
+  execution_policy: ExecutionPolicy,
 }
 
 impl TaskRequest {
   pub fn new(
     task: String,
     workspace: Workspace,
-    permission_mode: PermissionMode,
+    execution_policy: ExecutionPolicy,
   ) -> Result<Self, TaskRequestError> {
     let task = task.trim();
 
@@ -42,12 +23,12 @@ impl TaskRequest {
     return Ok(Self {
       task: task.to_owned(),
       workspace,
-      permission_mode,
+      execution_policy,
     });
   }
 
-  pub fn permission_mode(&self) -> PermissionMode {
-    return self.permission_mode;
+  pub fn execution_policy(&self) -> ExecutionPolicy {
+    return self.execution_policy;
   }
 
   pub fn task(&self) -> &str {
@@ -78,23 +59,25 @@ impl std::error::Error for TaskRequestError {}
 
 #[cfg(test)]
 mod tests {
-  use super::{PermissionMode, TaskRequest, TaskRequestError};
-  use crate::workspace::Workspace;
+  use super::{TaskRequest, TaskRequestError};
+  use crate::{
+    security::{
+      ApprovalPolicy, ExecutionPolicy,
+      sandbox::{NetworkAccess, SandboxMode},
+    },
+    workspace::Workspace,
+  };
   use std::path::PathBuf;
 
   #[test]
   fn creates_a_request_with_a_normalized_task() -> () {
     let workspace = Workspace::new(PathBuf::from("/workspace"), false);
-    let request = TaskRequest::new(
-      "  inspect the project  ".to_owned(),
-      workspace,
-      PermissionMode::ReadOnly,
-    )
-    .expect("the request should be valid");
+    let request = TaskRequest::new("  inspect the project  ".to_owned(), workspace, policy())
+      .expect("the request should be valid");
 
     assert_eq!(request.task(), "inspect the project");
     assert_eq!(request.workspace().path(), PathBuf::from("/workspace"));
-    assert_eq!(request.permission_mode(), PermissionMode::ReadOnly);
+    assert_eq!(request.execution_policy(), policy());
 
     return;
   }
@@ -102,10 +85,19 @@ mod tests {
   #[test]
   fn rejects_an_empty_task() -> () {
     let workspace = Workspace::new(PathBuf::from("/workspace"), false);
-    let result = TaskRequest::new("  ".to_owned(), workspace, PermissionMode::ReadOnly);
+    let result = TaskRequest::new("  ".to_owned(), workspace, policy());
 
     assert_eq!(result.unwrap_err(), TaskRequestError::EmptyTask);
 
     return;
+  }
+
+  fn policy() -> ExecutionPolicy {
+    return ExecutionPolicy::new(
+      SandboxMode::ReadOnly,
+      NetworkAccess::Denied,
+      ApprovalPolicy::OnRequest,
+    )
+    .expect("the policy should be valid");
   }
 }

@@ -41,6 +41,16 @@ kermet run \
   "Inspect src/main.rs"
 ```
 
+## Execution policy
+
+Each `run` invocation carries an explicit execution policy. Its defaults are read-only filesystem access, denied network access, and approval on request:
+
+```sh
+kermet run "Inspect src/main.rs"
+```
+
+Use `--sandbox read-only|workspace-write|danger-full-access`, `--network denied|allowed`, and `--approval-policy on-request|never` to select the policy. `danger-full-access` requires `--network allowed`. A requirement outside the selected policy is returned as an approval request when the policy is `on-request`; the CLI does not grant it automatically.
+
 ## Interactive threads
 
 Start an interactive thread with `run --interactive` (or `run -i`):

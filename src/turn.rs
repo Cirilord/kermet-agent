@@ -2,7 +2,7 @@ use crate::{
   agent::{AgentEvent, AgentLoop, AgentLoopError, TaskRequest},
   models::ModelSelection,
   providers::{ProviderRegistry, ProviderRegistryError},
-  security::{KeyringCredentialStore, PermissionManager},
+  security::{AuthorizationManager, KeyringCredentialStore},
   tools::ToolRegistry,
 };
 
@@ -22,7 +22,7 @@ pub fn execute_turn(
     Ok(provider) => provider,
     Err(error) => return Err(TurnError::Provider(error)),
   };
-  let tools = ToolRegistry::new(PermissionManager::new());
+  let tools = ToolRegistry::new(AuthorizationManager::new());
   let agent_loop = AgentLoop::new(provider, tools);
   let result = match agent_loop.execute(request, model_selection, on_event) {
     Ok(result) => result,

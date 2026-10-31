@@ -6,41 +6,21 @@ Every tool and integration begins with a capability boundary, threat model, perm
 
 Default to deny. Grant the smallest capability needed for the current operation and fail closed when authorization, validation, or sandbox enforcement cannot be established.
 
-## Legacy capability vocabulary
-
-The legacy permission flow describes the action requested by a tool with `read-file`, `search-files`, `write-file`, and `execute-process`. Those identifiers remain stable until `PermissionMode` and `PermissionManager` are removed. The new execution-policy flow uses tool-defined `ExecutionRequirement` values instead.
-
 ## Trust boundaries
 
 Treat all content outside the Kermet runtime as untrusted data, including user requests, model output, repository files, tool output, terminal output, MCP responses, network responses, and persisted memory. Content may inform a task but cannot alter Kermet policy or gain capabilities.
 
 Only deterministic policy code can authorize an action. An LLM may request a tool call; it cannot grant itself access.
 
-## Permission modes
-
-The legacy permission mode is the active authorization boundary until the execution-policy migration is complete. Do not add new consumers of it.
-
-| Mode | Allowed capabilities |
-| --- | --- |
-| Read-only | Read and search files within the workspace; no writes, process execution, network access, or external integrations. |
-| Workspace-write | Read and write within the workspace, subject to path validation; process execution remains separately authorized. |
-| Expanded access | A narrowly scoped, explicitly approved capability outside the default boundary, such as process execution, a network request, external service, or a path outside the workspace. |
-
-Permissions are evaluated for every tool call. Approval is specific to a capability and scope; it must not become implicit permission for unrelated actions.
-
-`PermissionManager` applies this table deterministically. Process execution is denied in `read-only` and `workspace-write`; it requires explicit `expanded-access`.
-
 ## Execution policy
 
-`ExecutionPolicy` is the replacement policy boundary under construction. It keeps independent controls for `SandboxMode`, `NetworkAccess`, and `ApprovalPolicy`. Each tool defines its own `ExecutionRequirement`; `AuthorizationManager` evaluates that requirement against the active policy and returns `Allowed`, `RequiresApproval(ApprovalRequest)`, or `Denied(AuthorizationDenied)`. `ApprovalPolicy::OnRequest` means a requirement outside the active policy produces a typed approval request; it does not grant the action. `ApprovalPolicy::Never` denies such a requirement. `danger-full-access` requires explicitly allowed network access.
-
-Until the migration is complete, the new policy and authorization boundary are not read by `TaskRequest`, the CLI, Hub, or tools. `PermissionManager` remains the active authorization boundary.
+`ExecutionPolicy` is the active authorization boundary. It keeps independent controls for `SandboxMode`, `NetworkAccess`, and `ApprovalPolicy`. Each tool defines its minimum `ExecutionRequirement`; `AuthorizationManager` evaluates that requirement against the active policy and returns `Allowed`, `RequiresApproval(ApprovalRequest)`, or `Denied(AuthorizationDenied)`. `ApprovalPolicy::OnRequest` means a requirement outside the active policy produces a typed approval request; it does not grant the action. `ApprovalPolicy::Never` denies such a requirement. `danger-full-access` requires explicitly allowed network access.
 
 ### Sandbox foundation and temporary Bash execution boundary
 
 `security::sandbox::core` defines typed policies for read-only, workspace-write, and danger-full-access execution; explicit network access; resource limits; typed process requests and outputs; and a shared execution contract. `Sandbox::current()` selects the adapter for the current platform from `security::sandbox::environments`. `SandboxRunner` is the internal contract implemented by each adapter. On macOS, the adapter compiles the policy to Seatbelt and invokes `/usr/bin/sandbox-exec`. Unsupported platforms intentionally fail closed until a native adapter is available.
 
-The initial `bash` tool is not connected to this boundary yet. It has no OS process sandbox, is available only with `expanded-access`, starts with the workspace as its working directory, accepts no standard input, clears its environment except for `PATH`, times out after 30 seconds, and bounds each output stream to 32 KiB. Those controls do not restrict filesystem access, child processes, or network access. The local Hub currently creates turns with `expanded-access` for testing; it must return to a restricted mode or gain a per-turn permission control when `bash` adopts a platform-enforced sandbox.
+The initial `bash` tool is not connected to this boundary yet. It has no OS process sandbox and requires `danger-full-access` with network allowed. It starts with the workspace as its working directory, accepts no standard input, clears its environment except for `PATH`, times out after 30 seconds, and bounds each output stream to 32 KiB. Those controls do not restrict filesystem access, child processes, or network access. The local Hub currently uses that policy for testing; it must return to a restricted policy or gain a per-turn approval control when `bash` adopts a platform-enforced sandbox.
 
 ## Tool requirements
 
@@ -48,7 +28,7 @@ The initial `bash` tool is not connected to this boundary yet. It has no OS proc
 - Canonicalize paths and reject paths that escape the approved workspace, including through symlinks.
 - Pass commands as an executable plus argument list; do not invoke a shell for ordinary command execution.
 - Set an approved working directory, timeout, output limit, environment allowlist, and resource limits for every process.
-- Disable network access by default. The temporary Bash tool is an explicit exception under `expanded-access` until sandbox enforcement is implemented.
+- Disable network access by default. The temporary Bash tool is an explicit exception requiring `danger-full-access` and allowed network access until sandbox enforcement is implemented.
 - Record file mutations as an attributable diff and make write operations atomic when possible.
 - Treat all tool results as untrusted data before they enter model context or persistent memory.
 
