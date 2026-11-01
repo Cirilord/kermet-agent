@@ -10,6 +10,8 @@
 
 The CLI parses user input and converts it into typed domain requests. It does not contain agent behavior, provider logic, security decisions, or tool execution.
 
+The CLI returns typed actions without invoking application or provider code. The composition root receives those actions and will connect them to use cases when those use cases exist.
+
 The agent core coordinates a task through explicit state and typed interfaces. Providers translate external model protocols into internal requests. Tools validate and execute those requests through deterministic security boundaries.
 
 External inputs, model output, tool output, persisted data, and network responses are untrusted data. They must be validated before crossing into a domain boundary.
