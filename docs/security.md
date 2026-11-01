@@ -29,6 +29,15 @@ Only deterministic code can authorize an action. A model may request an action, 
 - Do not fall back to plaintext storage when secure storage is unavailable.
 - Redact sensitive values before displaying, logging, or storing tool output.
 
+## Provider Authentication
+
+- Use documented provider authentication flows. Do not reuse another application's OAuth client identifier or credentials.
+- A browser OAuth login must use a loopback callback bound only to `127.0.0.1`, PKCE, fresh state, and a fresh OIDC nonce for every attempt.
+- Validate the callback state before exchanging an authorization code. Validate identity-token signature, issuer, audience, expiry, nonce, and required provider permission before storing credentials.
+- Configure provider HTTP clients not to follow redirects.
+- Store provider tokens only in the operating system credential store. If that store is unavailable, fail without falling back to a plaintext credential file.
+- Never log authorization codes, browser callback URLs, access tokens, refresh tokens, identity tokens, or credential records.
+
 ## Failure Behavior
 
 If a security check fails or cannot be evaluated, do not execute the action. Return a typed failure that explains the blocked operation without exposing sensitive details.
