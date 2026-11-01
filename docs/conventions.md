@@ -1,56 +1,40 @@
-# Engineering Conventions
+# Conventions
 
-## General
+## Module Layout
 
-- Use English for source code, comments, documentation, identifiers, and user-facing text.
-- Keep modules small and give each one a clear responsibility.
-- Make dependencies explicit through function arguments and constructors.
-- Avoid global mutable state.
-- Introduce an abstraction only when it has at least two concrete use cases.
-- Functions may call items declared later in the same module; order items for readability, not compilation dependencies.
+Organize module directories in this order when the files apply:
 
-## Rust
+```text
+module/
+├── mod.rs
+├── tests.rs
+├── error.rs
+├── utils.rs
+└── ...
+```
 
-- Use stable Rust.
-- Keep `cargo fmt --check` and `cargo clippy -- -D warnings` clean.
-- Declare an explicit return type on every function, including `-> ()`.
-- End every function with an explicit `return`; do not use implicit tail-expression returns.
-- Prefer domain types and enums over primitive strings and booleans.
-- Use `Result` for expected failures and typed error enums at module boundaries.
-- Do not use `unwrap()` or `expect()` in production paths.
-- Use `thiserror` for library errors and `anyhow` only at application boundaries.
-- Avoid `unsafe`; document and isolate every required use.
+Use `tests.rs` for unit tests, `error.rs` for module error types, and `utils.rs` only for independent helper functions. Add other files only for distinct module responsibilities.
 
-## Errors and fail-fast behavior
+Keep `mod.rs` free of implementation code. It may declare child modules, import items, and expose public exports or re-exports only.
 
-- Validate input at the boundary where it enters the system.
-- Fail immediately on invalid state, broken invariants, unsupported operations, and missing required configuration.
-- Do not silently coerce invalid input or substitute fallback values.
-- Include actionable context in errors without exposing secrets.
-- Make retries bounded, explicit, and observable.
-
-## Async and concurrency
-
-- Give asynchronous work an owner, cancellation behavior, and a timeout when applicable.
-- Do not detach background work without tracking its result.
-- Avoid shared mutable state; use message passing or synchronization primitives deliberately.
-- Preserve ordering when tool calls or file mutations depend on each other.
-
-## Public interfaces
-
-- Keep provider and tool interfaces provider-agnostic.
-- Validate external payloads before converting them to domain types.
-- Version persisted schemas and migrations.
-- Document invariants and side effects on public APIs.
+Declare `#[cfg(test)] mod tests;` last in every `mod.rs`, after module declarations, imports, exports, and re-exports.
 
 ## Tests
 
-- Test deterministic behavior without LLM calls whenever possible.
-- Use fakes for models, tools, clocks, and filesystem boundaries.
-- Add a regression test for every fixed bug.
-- Test errors and permission denials as carefully as successful paths.
+Place a module's unit tests in `tests.rs` at the same directory level as the module being tested. Declare that file from the module with `#[cfg(test)] mod tests;`. Do not place unit tests in production source files.
 
-## Observability
+## Imports
 
-- Emit structured events for state transitions, model requests, tool calls, retries, and failures.
-- Never log secrets, credentials, or unrestricted file contents.
+Prefer `super` for items in the parent module or its descendants. Use `crate` only when the item is outside that local module boundary or when an absolute path materially improves clarity.
+
+## Derives
+
+Derive only the traits required by the current implementation, public interface, or tests. Do not add speculative `derive` directives.
+
+## Visibility
+
+Use the narrowest visibility that satisfies the caller. Prefer private items, then `pub(super)` or `pub(in ...)`, and use `pub(crate)` only when a crate-level boundary requires it. Use `pub` only for an intended public library interface.
+
+## Errors
+
+Define a module's error types in its `error.rs` file. Use a single `error.rs` rather than an `errors/` directory unless separate error modules become necessary.

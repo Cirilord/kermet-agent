@@ -2,28 +2,19 @@
 
 ## Philosophy
 
-Kermet uses deterministic systems wherever they can reliably do the work. LLM calls are reserved for tasks that require judgment, ambiguity resolution, or generation.
+Kermet uses deterministic systems whenever they can reliably perform work. LLM calls are reserved for judgment, ambiguity resolution, and generation.
 
-Before invoking an LLM, use deterministic capabilities to narrow the task and validate its result. When designing a capability, ask:
+Before invoking an LLM, use deterministic capabilities to narrow the task, prepare structured context, and validate results. The model should receive the smallest useful context needed for the current task.
 
-1. Can this be solved reliably with deterministic code?
-2. Can deterministic code narrow the task or validate the result before or after an LLM call?
-3. Does the LLM receive the smallest useful, well-structured context?
+## Product Scope
 
-Use an LLM only when its probabilistic reasoning adds value beyond those deterministic steps.
+Kermet is a local-first coding agent. Its goal is to inspect repositories, make scoped changes, and validate results within explicit execution boundaries.
 
-## Product scope
+The product prioritizes reliable task completion, clear control over local access, and efficient use of model context over the number of available features.
 
-Kermet is a local-first coding agent. Its initial goal is to investigate a repository, make scoped changes, and validate them autonomously within explicit execution boundaries.
+## Delivery Principles
 
-The differentiator is not more tools. It is using structured, deterministic context retrieval and evidence-based validation to complete work with less waste.
-
-Security is a release gate for every tool and integration; see `docs/security.md`.
-
-## Delivery order
-
-1. Agent loop, model provider interface, file tools, repository search, terminal execution, and permissions.
-2. Persistent sessions, token-aware context compaction, structured task state, and validation evidence.
-3. File and symbol indexes, dependency graph, incremental updates, and targeted context retrieval.
-4. Semantic retrieval with embeddings and vector search.
-5. MCP, skills, subagents, and adaptive model routing when the core has measurable baselines.
+- Build the smallest complete capability before expanding scope.
+- Prefer deterministic validation over model judgment when possible.
+- Make security a release requirement for every tool and integration.
+- Preserve observable state and evidence for actions that affect a workspace.

@@ -1,32 +1,48 @@
 # Kermet
 
+Kermet is a local-first coding agent written in Rust.
+
 > Less searching. More building.
 
-Kermet is a local coding agent that understands repositories, makes changes, and validates results with evidence.
-
-## Vision
-
-A coding agent should be able to:
-
-- investigate a codebase without loading the entire repository into context;
-- edit files and run commands within defined boundaries;
-- track decisions, attempts, and progress throughout a task;
-- validate changes with tests, analysis, and other verifiable signals.
-
-## Philosophy
-
-Kermet uses deterministic systems to prepare, constrain, and validate work, reserving LLM calls for judgment, ambiguity, and generation.
+It is being built around deterministic execution, explicit security boundaries, and efficient model context. The agent should use deterministic code whenever it can reliably inspect, validate, or narrow a task; language models are reserved for judgment, ambiguity resolution, and generation.
 
 ## Status
 
-Kermet is at the beginning of development. The first version will include an agent core, file and terminal tools, repository search, and execution with explicit permissions.
+Kermet is under active development. The current codebase contains only the initial Rust executable while the final architecture is rebuilt.
 
 ## Principles
 
-- Deterministic work before probabilistic reasoning.
-- Fail-fast, explicit execution.
-- Evidence-based completion.
+- Keep the agent core independent from interfaces, providers, tools, and platform integrations.
+- Validate untrusted input at every boundary.
+- Default to deny and grant the smallest access needed for an operation.
+- Prefer typed, deterministic systems over implicit behavior.
+- Send the smallest useful context to a model.
 
-## License
+## Requirements
 
-To be determined.
+- Current stable Rust toolchain.
+- Clippy and rustfmt Rust components.
+- Lefthook for local Git hooks.
+- Cocogitto for Conventional Commit validation.
+
+## Run
+
+```sh
+cargo run
+```
+
+## Validation
+
+```sh
+cargo fmt --check
+cargo clippy -- -D warnings
+cargo test
+```
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Conventions](docs/conventions.md)
+- [Development workflow](docs/development.md)
+- [Product direction](docs/product.md)
+- [Security policy](docs/security.md)
