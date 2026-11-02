@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use super::{ProviderError, codex::CodexProvider};
+use super::{ProviderError, codex::CodexProvider, state::ActiveProviderStore};
 
 pub(crate) struct ProviderAccount {
   email: Option<String>,
@@ -41,6 +41,14 @@ impl ProviderKind {
 
     return Ok(provider_kind);
   }
+
+  pub(super) fn identifier(&self) -> &str {
+    let identifier = match *self {
+      Self::Codex => "codex",
+    };
+
+    return identifier;
+  }
 }
 
 impl Display for ProviderKind {
@@ -69,10 +77,35 @@ impl From<ProviderKind> for Provider {
 
 impl Provider {
   pub(crate) fn login(&self) -> Result<ProviderAccount, ProviderError> {
+    let active_provider = match ActiveProviderStore::load() {
+      Ok(active_provider) => active_provider,
+      Err(error) => return Err(error),
+    };
+    if let Some(provider_kind) = active_provider {
+      return Err(ProviderError::ActiveProvider(provider_kind));
+    }
+
     let result = match *self {
       Self::Codex => CodexProvider.login(),
     };
+    let account = match result {
+      Ok(account) => account,
+      Err(error) => return Err(error),
+    };
+    let provider_kind = self.kind();
 
-    return result;
+    if let Err(error) = ActiveProviderStore::save(&provider_kind) {
+      return Err(error);
+    }
+
+    return Ok(account);
+  }
+
+  fn kind(&self) -> ProviderKind {
+    let provider_kind = match *self {
+      Self::Codex => ProviderKind::Codex,
+    };
+
+    return provider_kind;
   }
 }

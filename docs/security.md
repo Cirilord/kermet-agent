@@ -36,6 +36,7 @@ Only deterministic code can authorize an action. A model may request an action, 
 - Validate the callback state before exchanging an authorization code. Validate identity-token signature, issuer, audience, expiry, nonce, and required provider permission before storing credentials.
 - Configure provider HTTP clients not to follow redirects.
 - Store provider tokens only in the operating system credential store. If that store is unavailable, fail without falling back to a plaintext credential file.
+- Persist the active provider in the operating system credential store and fail closed if that state cannot be read or written.
 - Never log authorization codes, browser callback URLs, access tokens, refresh tokens, identity tokens, or credential records.
 
 ## Failure Behavior
