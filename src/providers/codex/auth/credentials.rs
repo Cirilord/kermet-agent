@@ -78,6 +78,18 @@ impl CredentialStore {
 
     return Ok(());
   }
+
+  pub(super) fn clear_tokens(mut record: CredentialRecord) -> Result<(), CodexAuthError> {
+    record.access_token.clear();
+    record.expires_at_unix_seconds = 0;
+    record.id_token.clear();
+    record.refresh_token.clear();
+    record.scopes.clear();
+
+    let result = Self::save(&record);
+
+    return result;
+  }
 }
 
 fn credential_entry(account: &str) -> Result<Entry, CodexAuthError> {

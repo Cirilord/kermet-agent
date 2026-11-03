@@ -38,6 +38,7 @@ Only deterministic code can authorize an action. A model may request an action, 
 - Store provider tokens only in the operating system credential store. If that store is unavailable, fail without falling back to a plaintext credential file.
 - Persist the active provider in the operating system credential store and fail closed if that state cannot be read or written.
 - Never log authorization codes, browser callback URLs, access tokens, refresh tokens, identity tokens, or credential records.
+- On logout, attempt remote refresh-token revocation before clearing local tokens. If revocation cannot be confirmed, clear local tokens and report that the remote session may still require manual disconnection.
 
 ## Failure Behavior
 

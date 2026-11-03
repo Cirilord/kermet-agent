@@ -38,6 +38,18 @@ impl ActiveProviderStore {
 
     return Ok(());
   }
+
+  pub(super) fn clear() -> Result<(), ProviderError> {
+    let entry = match entry() {
+      Ok(entry) => entry,
+      Err(error) => return Err(error),
+    };
+
+    match entry.delete_credential() {
+      Ok(()) | Err(Error::NoEntry) => return Ok(()),
+      Err(_) => return Err(ProviderError::ActiveProviderState),
+    }
+  }
 }
 
 fn entry() -> Result<Entry, ProviderError> {

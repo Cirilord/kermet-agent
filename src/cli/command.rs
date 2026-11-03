@@ -17,12 +17,15 @@ pub(super) struct Cli {
 pub(super) enum Command {
   /// Authenticate with a provider.
   Login(LoginArgs),
+  /// Sign out from the active provider.
+  Logout,
 }
 
 pub(crate) fn parse() -> Result<CliAction, CliError> {
   let cli = Cli::parse();
   let result = match cli.command {
     Command::Login(args) => commands::login(args),
+    Command::Logout => commands::logout(),
   };
 
   return result;

@@ -3,8 +3,8 @@ use std::time::Duration;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header, jwk::JwkSet};
 use oauth2::{
   AuthUrl, AuthorizationCode, Client, ClientId, EndpointNotSet, EndpointSet, ExtraTokenFields,
-  PkceCodeVerifier, RedirectUrl, StandardRevocableToken, StandardTokenResponse, TokenResponse,
-  TokenUrl,
+  PkceCodeVerifier, RedirectUrl, RefreshToken, RevocationUrl, StandardRevocableToken,
+  StandardTokenResponse, TokenResponse, TokenUrl,
   basic::{
     BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
     BasicTokenType,
@@ -19,6 +19,7 @@ const AUTHORIZATION_ENDPOINT: &str = "https://auth.openai.com/api/accounts/autho
 const ISSUER: &str = "https://auth.openai.com";
 const JWKS_URL: &str = "https://auth.openai.com/.well-known/jwks.json";
 const RESOURCE: &str = "https://api.openai.com/v1";
+const REVOCATION_ENDPOINT: &str = "https://auth.openai.com/api/accounts/oauth/revoke";
 const TOKEN_ENDPOINT: &str = "https://auth.openai.com/api/accounts/oauth/token";
 
 pub(super) struct IdTokenIdentity {
@@ -186,6 +187,23 @@ impl OAuthClient {
     };
 
     return Ok(identity);
+  }
+
+  pub(super) fn revoke_refresh_token(&self, client_id: &str, refresh_token: &str) -> bool {
+    let revocation_url = match RevocationUrl::new(REVOCATION_ENDPOINT.to_owned()) {
+      Ok(revocation_url) => revocation_url,
+      Err(_) => return false,
+    };
+    let client =
+      BaseOpenAiClient::new(ClientId::new(client_id.to_owned())).set_revocation_url(revocation_url);
+    let token = RefreshToken::new(refresh_token.to_owned());
+    let request = match client.revoke_token(token.into()) {
+      Ok(request) => request,
+      Err(_) => return false,
+    };
+    let result = request.request(&self.http);
+
+    return result.is_ok();
   }
 }
 

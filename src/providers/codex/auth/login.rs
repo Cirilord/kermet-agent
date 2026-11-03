@@ -34,7 +34,7 @@ pub(in super::super) fn login() -> Result<CodexAccount, CodexAuthError> {
     Err(error) => return Err(error),
   };
   let existing_client_id = existing_record.as_ref().map(record_client_id);
-  let id_token_hint = existing_record.as_ref().map(record_id_token);
+  let id_token_hint = existing_record.as_ref().and_then(record_id_token);
   let attempt = match create_attempt(
     existing_client_id,
     callback_server.redirect_uri().to_owned(),
@@ -163,6 +163,10 @@ fn record_client_id(record: &CredentialRecord) -> &str {
   return &record.client_id;
 }
 
-fn record_id_token(record: &CredentialRecord) -> &str {
-  return &record.id_token;
+fn record_id_token(record: &CredentialRecord) -> Option<&str> {
+  if record.id_token.is_empty() {
+    return None;
+  }
+
+  return Some(&record.id_token);
 }

@@ -22,7 +22,7 @@ pub(in super::super) fn login(args: LoginArgs) -> Result<CliAction, CliError> {
   let provider = args.provider.trim();
 
   if provider.is_empty() {
-    return Err(CliError::EmptyLoginProvider);
+    return Err(CliError::EmptyProvider);
   }
   let input = LoginInput {
     provider: provider.to_owned(),

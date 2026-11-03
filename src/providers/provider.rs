@@ -7,6 +7,12 @@ pub(crate) struct ProviderAccount {
   provider_kind: ProviderKind,
 }
 
+pub(crate) enum ProviderLogout {
+  NotSignedIn,
+  RevocationUnconfirmed,
+  Revoked,
+}
+
 impl ProviderAccount {
   pub(super) fn new(provider_kind: ProviderKind, email: Option<String>) -> ProviderAccount {
     let account = ProviderAccount {
@@ -99,6 +105,30 @@ impl Provider {
     }
 
     return Ok(account);
+  }
+
+  pub(crate) fn logout() -> Result<ProviderLogout, ProviderError> {
+    let active_provider = match ActiveProviderStore::load() {
+      Ok(active_provider) => active_provider,
+      Err(error) => return Err(error),
+    };
+    let provider_kind = match active_provider {
+      Some(provider_kind) => provider_kind,
+      None => return Ok(ProviderLogout::NotSignedIn),
+    };
+    let result = match provider_kind {
+      ProviderKind::Codex => CodexProvider.logout(),
+    };
+    let provider_logout = match result {
+      Ok(result) => result,
+      Err(error) => return Err(error),
+    };
+
+    if let Err(error) = ActiveProviderStore::clear() {
+      return Err(error);
+    }
+
+    return Ok(provider_logout);
   }
 
   fn kind(&self) -> ProviderKind {

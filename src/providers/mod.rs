@@ -4,7 +4,7 @@ mod provider;
 mod state;
 
 pub(crate) use error::ProviderError;
-pub(crate) use provider::{Provider, ProviderAccount, ProviderKind};
+pub(crate) use provider::{Provider, ProviderAccount, ProviderKind, ProviderLogout};
 
 #[cfg(test)]
 mod tests;

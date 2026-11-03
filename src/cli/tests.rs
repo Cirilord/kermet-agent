@@ -19,12 +19,18 @@ fn parses_the_login_command() -> () {
 fn trims_the_login_provider() -> () {
   let cli = Cli::try_parse_from(["kermet", "login", "  example-provider  "])
     .expect("the login command should parse");
-  let Command::Login(args) = cli.command;
+  let args = match cli.command {
+    Command::Login(args) => args,
+    Command::Logout => panic!("the command should be login"),
+  };
   let action = match commands::login(args) {
     Ok(action) => action,
     Err(_) => panic!("the login action should be valid"),
   };
-  let CliAction::Login(args) = action;
+  let args = match action {
+    CliAction::Login(args) => args,
+    CliAction::Logout => panic!("the action should be login"),
+  };
 
   assert_eq!(args.provider(), "example-provider");
 
@@ -35,10 +41,22 @@ fn trims_the_login_provider() -> () {
 fn rejects_an_empty_login_provider() -> () {
   let cli =
     Cli::try_parse_from(["kermet", "login", "   "]).expect("the login command should parse");
-  let Command::Login(args) = cli.command;
+  let args = match cli.command {
+    Command::Login(args) => args,
+    Command::Logout => panic!("the command should be login"),
+  };
   let result = commands::login(args);
 
-  assert!(matches!(result, Err(CliError::EmptyLoginProvider)));
+  assert!(matches!(result, Err(CliError::EmptyProvider)));
+
+  return;
+}
+
+#[test]
+fn parses_the_logout_command() -> () {
+  let cli = Cli::try_parse_from(["kermet", "logout"]).expect("the logout command should parse");
+
+  assert!(matches!(cli.command, Command::Logout));
 
   return;
 }

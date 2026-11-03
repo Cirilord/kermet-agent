@@ -16,6 +16,7 @@ fn main() -> std::process::ExitCode {
 
   let exit_code = match action {
     cli::CliAction::Login(args) => login(args),
+    cli::CliAction::Logout => logout(),
   };
 
   return exit_code;
@@ -43,6 +44,27 @@ fn login(input: cli::LoginInput) -> std::process::ExitCode {
   match account.email() {
     Some(email) => println!("Signed in with {} as {email}.", account.provider_kind()),
     None => println!("Signed in with {}.", account.provider_kind()),
+  }
+
+  return std::process::ExitCode::SUCCESS;
+}
+
+fn logout() -> std::process::ExitCode {
+  let result = match providers::Provider::logout() {
+    Ok(result) => result,
+    Err(error) => {
+      eprintln!("error: {error}");
+
+      return std::process::ExitCode::from(PROVIDER_EXIT_CODE);
+    }
+  };
+
+  match result {
+    providers::ProviderLogout::NotSignedIn => println!("No active provider session was found."),
+    providers::ProviderLogout::Revoked => println!("Signed out."),
+    providers::ProviderLogout::RevocationUnconfirmed => {
+      eprintln!("Signed out locally. Remote session revocation was not confirmed.");
+    }
   }
 
   return std::process::ExitCode::SUCCESS;
