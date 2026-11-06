@@ -1,4 +1,4 @@
-use super::commands::{ConfigKeyInput, ConfigSetInput, LoginInput};
+use super::commands::{ConfigKeyInput, ConfigSetInput, DefaultModelInput, LoginInput};
 
 pub(crate) enum CliAction {
   GetConfig(ConfigKeyInput),
@@ -7,5 +7,6 @@ pub(crate) enum CliAction {
   UnsetConfig(ConfigKeyInput),
   Login(LoginInput),
   ListModels,
+  SetDefaultModel(DefaultModelInput),
   Logout,
 }

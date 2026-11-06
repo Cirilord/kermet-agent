@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use super::{
   CliError,
   action::CliAction,
-  commands::{self, ConfigArgs, LoginArgs},
+  commands::{self, ConfigArgs, LoginArgs, ModelsArgs},
 };
 
 #[derive(Parser)]
@@ -19,8 +19,8 @@ pub(super) enum Command {
   Config(ConfigArgs),
   /// Authenticate with a provider.
   Login(LoginArgs),
-  /// List the models available to the active provider.
-  Models,
+  /// List models or set the default model profile.
+  Models(ModelsArgs),
   /// Sign out from the active provider.
   Logout,
 }
@@ -30,7 +30,7 @@ pub(crate) fn parse() -> Result<CliAction, CliError> {
   let result = match cli.command {
     Command::Config(args) => commands::config(args),
     Command::Login(args) => commands::login(args),
-    Command::Models => commands::list_models(),
+    Command::Models(args) => commands::models(args),
     Command::Logout => commands::logout(),
   };
 

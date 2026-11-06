@@ -30,10 +30,56 @@ fn main() -> std::process::ExitCode {
     cli::CliAction::UnsetConfig(input) => unset_config(input),
     cli::CliAction::Login(args) => login(args),
     cli::CliAction::ListModels => list_models(),
+    cli::CliAction::SetDefaultModel(input) => set_default_model(input),
     cli::CliAction::Logout => logout(),
   };
 
   return exit_code;
+}
+
+fn set_default_model(input: cli::DefaultModelInput) -> std::process::ExitCode {
+  let provider = match providers::Provider::get_active_provider() {
+    Ok(provider) => provider,
+    Err(error) => {
+      eprintln!("error: {error}");
+
+      return std::process::ExitCode::from(PROVIDER_EXIT_CODE);
+    }
+  };
+  let model = match providers::Provider::get_model(input.slug()) {
+    Ok(model) => model,
+    Err(error) => {
+      eprintln!("error: {error}");
+
+      return std::process::ExitCode::from(PROVIDER_EXIT_CODE);
+    }
+  };
+
+  let provider = config::set("profiles.default.provider", provider.identifier());
+  if let Err(error) = provider {
+    eprintln!("error: {error}");
+
+    return std::process::ExitCode::from(CONFIGURATION_EXIT_CODE);
+  }
+
+  let model_result = config::set("profiles.default.model", model.slug());
+  if let Err(error) = model_result {
+    eprintln!("error: {error}");
+
+    return std::process::ExitCode::from(CONFIGURATION_EXIT_CODE);
+  }
+
+  let reasoning_effort = config::set(
+    "profiles.default.reasoning_effort",
+    model.default_reasoning_level(),
+  );
+  if let Err(error) = reasoning_effort {
+    eprintln!("error: {error}");
+
+    return std::process::ExitCode::from(CONFIGURATION_EXIT_CODE);
+  }
+
+  return std::process::ExitCode::SUCCESS;
 }
 
 fn get_config(input: cli::ConfigKeyInput) -> std::process::ExitCode {

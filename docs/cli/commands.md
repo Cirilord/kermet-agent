@@ -7,5 +7,6 @@
 | `kermet config show` | None. | None | Prints `~/.kermet/config.toml`. Kermet creates the file when it is missing. | Available |
 | `kermet config unset <key>` | Configuration key path. | None | Removes a configuration value. Paths may address TOML tables. | Available |
 | `kermet login <provider>` | Provider identifier. | None | Signs in with the selected provider. `codex` is currently supported. | Available |
+| `kermet models default <slug>` | Model slug. | None | Resolves the model in the active provider catalog and writes the complete `profiles.default` configuration profile. | Available |
 | `kermet models` | None. | None | Lists each model available to the active provider with its slug, display name, supported and default reasoning levels, context window, and maximum context window. | Available |
 | `kermet logout` | None. | None | Revokes the active provider's renewable session when possible and clears its local tokens. `codex` is currently supported. | Available |

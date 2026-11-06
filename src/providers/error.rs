@@ -10,6 +10,7 @@ pub(crate) enum ProviderError {
   ActiveProviderState,
   CodexAuthentication(CodexAuthError),
   CodexModels(CodexModelsError),
+  ModelNotFound(String),
   NoActiveProvider,
   UnsupportedIdentifier(String),
 }
@@ -30,6 +31,7 @@ impl Display for ProviderError {
         write!(formatter, "Codex authentication failed: {error}")
       }
       Self::CodexModels(ref error) => write!(formatter, "Codex models failed: {error}"),
+      Self::ModelNotFound(ref slug) => write!(formatter, "model not found: {slug}"),
       Self::NoActiveProvider => formatter.write_str("no active provider is configured"),
       Self::UnsupportedIdentifier(ref identifier) => {
         write!(formatter, "unsupported provider: {identifier}")

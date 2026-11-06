@@ -22,7 +22,7 @@ fn trims_the_login_provider() -> () {
   let args = match cli.command {
     Command::Config(_) => panic!("the command should be login"),
     Command::Login(args) => args,
-    Command::Models => panic!("the command should be login"),
+    Command::Models(_) => panic!("the command should be login"),
     Command::Logout => panic!("the command should be login"),
   };
   let action = match commands::login(args) {
@@ -36,6 +36,7 @@ fn trims_the_login_provider() -> () {
     CliAction::UnsetConfig(_) => panic!("the action should be login"),
     CliAction::Login(args) => args,
     CliAction::ListModels => panic!("the action should be login"),
+    CliAction::SetDefaultModel(_) => panic!("the action should be login"),
     CliAction::Logout => panic!("the action should be login"),
   };
 
@@ -51,7 +52,7 @@ fn rejects_an_empty_login_provider() -> () {
   let args = match cli.command {
     Command::Config(_) => panic!("the command should be login"),
     Command::Login(args) => args,
-    Command::Models => panic!("the command should be login"),
+    Command::Models(_) => panic!("the command should be login"),
     Command::Logout => panic!("the command should be login"),
   };
   let result = commands::login(args);
@@ -74,7 +75,17 @@ fn parses_the_logout_command() -> () {
 fn parses_the_models_command() -> () {
   let cli = Cli::try_parse_from(["kermet", "models"]).expect("the models command should parse");
 
-  assert!(matches!(cli.command, Command::Models));
+  assert!(matches!(cli.command, Command::Models(_)));
+
+  return;
+}
+
+#[test]
+fn parses_the_models_default_command() -> () {
+  let cli = Cli::try_parse_from(["kermet", "models", "default", "gpt-5.6-luna"])
+    .expect("the models default command should parse");
+
+  assert!(matches!(cli.command, Command::Models(_)));
 
   return;
 }

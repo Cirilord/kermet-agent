@@ -103,7 +103,7 @@ impl ProviderKind {
     return Ok(provider_kind);
   }
 
-  pub(super) fn identifier(&self) -> &str {
+  pub(crate) fn identifier(&self) -> &str {
     let identifier = match *self {
       Self::Codex => "codex",
     };
@@ -187,16 +187,43 @@ impl Provider {
   }
 
   pub(crate) fn list_models() -> Result<Vec<ProviderModel>, ProviderError> {
+    let provider_kind = match Self::get_active_provider() {
+      Ok(provider_kind) => provider_kind,
+      Err(error) => return Err(error),
+    };
+    let result = match provider_kind {
+      ProviderKind::Codex => CodexProvider.list_models(),
+    };
+
+    return result;
+  }
+
+  pub(crate) fn get_active_provider() -> Result<ProviderKind, ProviderError> {
     let active_provider = match ActiveProviderStore::load() {
       Ok(active_provider) => active_provider,
       Err(error) => return Err(error),
     };
-    let result = match active_provider {
-      Some(ProviderKind::Codex) => CodexProvider.list_models(),
+    let provider_kind = match active_provider {
+      Some(provider_kind) => provider_kind,
       None => return Err(ProviderError::NoActiveProvider),
     };
 
-    return result;
+    return Ok(provider_kind);
+  }
+
+  pub(crate) fn get_model(slug: &str) -> Result<ProviderModel, ProviderError> {
+    let models = match Self::list_models() {
+      Ok(models) => models,
+      Err(error) => return Err(error),
+    };
+
+    for model in models {
+      if model.slug() == slug {
+        return Ok(model);
+      }
+    }
+
+    return Err(ProviderError::ModelNotFound(slug.to_owned()));
   }
 
   fn kind(&self) -> ProviderKind {
