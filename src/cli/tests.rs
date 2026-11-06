@@ -20,6 +20,7 @@ fn trims_the_login_provider() -> () {
   let cli = Cli::try_parse_from(["kermet", "login", "  example-provider  "])
     .expect("the login command should parse");
   let args = match cli.command {
+    Command::Config(_) => panic!("the command should be login"),
     Command::Login(args) => args,
     Command::Models => panic!("the command should be login"),
     Command::Logout => panic!("the command should be login"),
@@ -29,6 +30,7 @@ fn trims_the_login_provider() -> () {
     Err(_) => panic!("the login action should be valid"),
   };
   let args = match action {
+    CliAction::ShowConfig => panic!("the action should be login"),
     CliAction::Login(args) => args,
     CliAction::ListModels => panic!("the action should be login"),
     CliAction::Logout => panic!("the action should be login"),
@@ -44,6 +46,7 @@ fn rejects_an_empty_login_provider() -> () {
   let cli =
     Cli::try_parse_from(["kermet", "login", "   "]).expect("the login command should parse");
   let args = match cli.command {
+    Command::Config(_) => panic!("the command should be login"),
     Command::Login(args) => args,
     Command::Models => panic!("the command should be login"),
     Command::Logout => panic!("the command should be login"),
@@ -69,6 +72,16 @@ fn parses_the_models_command() -> () {
   let cli = Cli::try_parse_from(["kermet", "models"]).expect("the models command should parse");
 
   assert!(matches!(cli.command, Command::Models));
+
+  return;
+}
+
+#[test]
+fn parses_the_config_show_command() -> () {
+  let cli = Cli::try_parse_from(["kermet", "config", "show"])
+    .expect("the config show command should parse");
+
+  assert!(matches!(cli.command, Command::Config(_)));
 
   return;
 }

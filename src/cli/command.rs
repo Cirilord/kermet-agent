@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use super::{
   CliError,
   action::CliAction,
-  commands::{self, LoginArgs},
+  commands::{self, ConfigArgs, LoginArgs},
 };
 
 #[derive(Parser)]
@@ -15,6 +15,8 @@ pub(super) struct Cli {
 
 #[derive(Subcommand)]
 pub(super) enum Command {
+  /// Manage the Kermet configuration.
+  Config(ConfigArgs),
   /// Authenticate with a provider.
   Login(LoginArgs),
   /// List the models available to the active provider.
@@ -26,6 +28,7 @@ pub(super) enum Command {
 pub(crate) fn parse() -> Result<CliAction, CliError> {
   let cli = Cli::parse();
   let result = match cli.command {
+    Command::Config(args) => commands::config(args),
     Command::Login(args) => commands::login(args),
     Command::Models => commands::list_models(),
     Command::Logout => commands::logout(),

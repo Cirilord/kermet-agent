@@ -1,7 +1,9 @@
 mod cli;
+mod config;
 mod providers;
 
 const INVALID_INPUT_EXIT_CODE: u8 = 2;
+const CONFIGURATION_EXIT_CODE: u8 = 4;
 const PROVIDER_EXIT_CODE: u8 = 3;
 
 fn main() -> std::process::ExitCode {
@@ -14,13 +16,36 @@ fn main() -> std::process::ExitCode {
     }
   };
 
+  let initialization = config::ensure_exists();
+  if let Err(error) = initialization {
+    eprintln!("error: {error}");
+
+    return std::process::ExitCode::from(CONFIGURATION_EXIT_CODE);
+  }
+
   let exit_code = match action {
+    cli::CliAction::ShowConfig => show_config(),
     cli::CliAction::Login(args) => login(args),
     cli::CliAction::ListModels => list_models(),
     cli::CliAction::Logout => logout(),
   };
 
   return exit_code;
+}
+
+fn show_config() -> std::process::ExitCode {
+  let contents = match config::read() {
+    Ok(contents) => contents,
+    Err(error) => {
+      eprintln!("error: {error}");
+
+      return std::process::ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+
+  print!("{contents}");
+
+  return std::process::ExitCode::SUCCESS;
 }
 
 fn login(input: cli::LoginInput) -> std::process::ExitCode {
