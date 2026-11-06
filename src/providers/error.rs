@@ -1,11 +1,16 @@
 use std::fmt::{Display, Formatter};
 
-use super::{ProviderKind, codex::CodexAuthError};
+use super::{
+  ProviderKind,
+  codex::{CodexAuthError, CodexModelsError},
+};
 
 pub(crate) enum ProviderError {
   ActiveProvider(ProviderKind),
   ActiveProviderState,
   CodexAuthentication(CodexAuthError),
+  CodexModels(CodexModelsError),
+  NoActiveProvider,
   UnsupportedIdentifier(String),
 }
 
@@ -24,6 +29,8 @@ impl Display for ProviderError {
       Self::CodexAuthentication(ref error) => {
         write!(formatter, "Codex authentication failed: {error}")
       }
+      Self::CodexModels(ref error) => write!(formatter, "Codex models failed: {error}"),
+      Self::NoActiveProvider => formatter.write_str("no active provider is configured"),
       Self::UnsupportedIdentifier(ref identifier) => {
         write!(formatter, "unsupported provider: {identifier}")
       }

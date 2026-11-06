@@ -1,6 +1,7 @@
 mod auth;
+mod models;
 
-use super::{ProviderAccount, ProviderError, ProviderKind, ProviderLogout};
+use super::{ProviderAccount, ProviderError, ProviderKind, ProviderLogout, ProviderModel};
 
 pub(super) struct CodexProvider;
 
@@ -28,6 +29,36 @@ impl CodexProvider {
 
     return Ok(provider_logout);
   }
+
+  pub(super) fn list_models(&self) -> Result<Vec<ProviderModel>, ProviderError> {
+    let access_token = match auth::access_token() {
+      Ok(access_token) => access_token,
+      Err(error) => return Err(ProviderError::CodexAuthentication(error)),
+    };
+    let access_token = match access_token {
+      Some(access_token) => access_token,
+      None => {
+        return Err(ProviderError::CodexModels(
+          models::CodexModelsError::NotSignedIn,
+        ));
+      }
+    };
+    let codex_models = match models::list_models(&access_token) {
+      Ok(codex_models) => codex_models,
+      Err(error) => return Err(ProviderError::CodexModels(error)),
+    };
+    let mut provider_models = Vec::new();
+
+    for model in codex_models {
+      let provider_model =
+        ProviderModel::new(model.slug().to_owned(), model.display_name().to_owned());
+
+      provider_models.push(provider_model);
+    }
+
+    return Ok(provider_models);
+  }
 }
 
 pub(super) use auth::CodexAuthError;
+pub(super) use models::CodexModelsError;

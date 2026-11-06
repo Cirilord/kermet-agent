@@ -16,6 +16,7 @@ fn main() -> std::process::ExitCode {
 
   let exit_code = match action {
     cli::CliAction::Login(args) => login(args),
+    cli::CliAction::ListModels => list_models(),
     cli::CliAction::Logout => logout(),
   };
 
@@ -65,6 +66,23 @@ fn logout() -> std::process::ExitCode {
     providers::ProviderLogout::RevocationUnconfirmed => {
       eprintln!("Signed out locally. Remote session revocation was not confirmed.");
     }
+  }
+
+  return std::process::ExitCode::SUCCESS;
+}
+
+fn list_models() -> std::process::ExitCode {
+  let models = match providers::Provider::list_models() {
+    Ok(models) => models,
+    Err(error) => {
+      eprintln!("error: {error}");
+
+      return std::process::ExitCode::from(PROVIDER_EXIT_CODE);
+    }
+  };
+
+  for model in models {
+    println!("{}\t{}", model.slug(), model.display_name());
   }
 
   return std::process::ExitCode::SUCCESS;

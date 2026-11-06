@@ -12,7 +12,7 @@ The CLI parses user input and converts it into typed domain requests. It does no
 
 The CLI returns typed actions without invoking application or provider code. The composition root receives those actions and will connect them to use cases when those use cases exist.
 
-Provider adapters own external authentication and model protocols. The composition root parses a provider kind and converts it into a provider, but provider modules must not depend on CLI types. Providers expose shared login and logout operations directly. Only one provider may be active at a time; the active provider is persisted independently from provider credentials.
+Provider adapters own external authentication and model protocols. The composition root parses a provider kind and converts it into a provider, but provider modules must not depend on CLI types. Providers expose shared login, logout, and model-catalog operations directly. Only one provider may be active at a time; the active provider is persisted independently from provider credentials.
 
 The agent core coordinates a task through explicit state and typed interfaces. Providers translate external model protocols into internal requests. Tools validate and execute those requests through deterministic security boundaries.
 

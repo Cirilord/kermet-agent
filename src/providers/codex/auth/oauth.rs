@@ -35,13 +35,20 @@ pub(super) struct TokenSet {
   pub(super) scopes: Vec<String>,
 }
 
+pub(super) struct RefreshedTokenSet {
+  pub(super) access_token: String,
+  pub(super) expires_in: u64,
+  pub(super) refresh_token: String,
+  pub(super) scopes: Option<Vec<String>>,
+}
+
 pub(super) struct OAuthClient {
   http: HttpClient,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(super) struct OpenAiExtraTokenFields {
-  id_token: String,
+  id_token: Option<String>,
 }
 
 impl ExtraTokenFields for OpenAiExtraTokenFields {}
@@ -124,7 +131,59 @@ impl OAuthClient {
     let token_set = TokenSet {
       access_token: response.access_token().secret().to_owned(),
       expires_in,
-      id_token: response.extra_fields().id_token.clone(),
+      id_token: match response.extra_fields().id_token.as_ref() {
+        Some(id_token) => id_token.clone(),
+        None => return Err(CodexAuthError::TokenExchange),
+      },
+      refresh_token,
+      scopes,
+    };
+
+    return Ok(token_set);
+  }
+
+  pub(super) fn refresh_token(
+    &self,
+    client_id: &str,
+    refresh_token: &str,
+  ) -> Result<RefreshedTokenSet, CodexAuthError> {
+    let token_url = match TokenUrl::new(TOKEN_ENDPOINT.to_owned()) {
+      Ok(token_url) => token_url,
+      Err(_) => return Err(CodexAuthError::TokenExchange),
+    };
+    let client =
+      BaseOpenAiClient::new(ClientId::new(client_id.to_owned())).set_token_uri(token_url);
+    let refresh_token = RefreshToken::new(refresh_token.to_owned());
+    let request = client
+      .exchange_refresh_token(&refresh_token)
+      .add_extra_param("resource", RESOURCE);
+    let response = match request.request(&self.http) {
+      Ok(response) => response,
+      Err(_) => return Err(CodexAuthError::TokenExchange),
+    };
+    let expires_in = match response.expires_in() {
+      Some(expires_in) => expires_in.as_secs(),
+      None => return Err(CodexAuthError::TokenExchange),
+    };
+    let refresh_token = match response.refresh_token() {
+      Some(refresh_token) => refresh_token.secret().to_owned(),
+      None => return Err(CodexAuthError::TokenExchange),
+    };
+    let scopes = match response.scopes() {
+      Some(response_scopes) => {
+        let mut scopes = Vec::new();
+
+        for scope in response_scopes {
+          scopes.push(scope.to_string());
+        }
+
+        Some(scopes)
+      }
+      None => None,
+    };
+    let token_set = RefreshedTokenSet {
+      access_token: response.access_token().secret().to_owned(),
+      expires_in,
       refresh_token,
       scopes,
     };

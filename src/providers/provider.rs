@@ -7,6 +7,11 @@ pub(crate) struct ProviderAccount {
   provider_kind: ProviderKind,
 }
 
+pub(crate) struct ProviderModel {
+  display_name: String,
+  slug: String,
+}
+
 pub(crate) enum ProviderLogout {
   NotSignedIn,
   RevocationUnconfirmed,
@@ -31,6 +36,22 @@ impl ProviderAccount {
 
   pub(crate) fn provider_kind(&self) -> &ProviderKind {
     return &self.provider_kind;
+  }
+}
+
+impl ProviderModel {
+  pub(super) fn new(slug: String, display_name: String) -> ProviderModel {
+    let model = ProviderModel { display_name, slug };
+
+    return model;
+  }
+
+  pub(crate) fn display_name(&self) -> &str {
+    return &self.display_name;
+  }
+
+  pub(crate) fn slug(&self) -> &str {
+    return &self.slug;
   }
 }
 
@@ -129,6 +150,19 @@ impl Provider {
     }
 
     return Ok(provider_logout);
+  }
+
+  pub(crate) fn list_models() -> Result<Vec<ProviderModel>, ProviderError> {
+    let active_provider = match ActiveProviderStore::load() {
+      Ok(active_provider) => active_provider,
+      Err(error) => return Err(error),
+    };
+    let result = match active_provider {
+      Some(ProviderKind::Codex) => CodexProvider.list_models(),
+      None => return Err(ProviderError::NoActiveProvider),
+    };
+
+    return result;
   }
 
   fn kind(&self) -> ProviderKind {

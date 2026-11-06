@@ -2,7 +2,8 @@ use oauth2::CsrfToken;
 use url::Url;
 
 use super::{
-  authorization::create_attempt, callback::callback_from_target, login::resolve_client_id,
+  authorization::create_attempt, callback::callback_from_target, credentials::CredentialRecord,
+  login::resolve_client_id, session::must_refresh,
 };
 
 #[test]
@@ -71,6 +72,39 @@ fn rejects_a_callback_with_an_unexpected_state() -> () {
   assert!(result.is_err());
 
   return;
+}
+
+#[test]
+fn refreshes_a_token_that_is_expired() -> () {
+  let record = credential_record(0);
+
+  assert!(must_refresh(&record));
+
+  return;
+}
+
+#[test]
+fn keeps_a_token_that_is_not_near_expiration() -> () {
+  let record = credential_record(u64::MAX);
+
+  assert!(!must_refresh(&record));
+
+  return;
+}
+
+fn credential_record(expires_at_unix_seconds: u64) -> CredentialRecord {
+  let record = CredentialRecord {
+    access_token: "access-token".to_owned(),
+    client_id: "client-id".to_owned(),
+    email: None,
+    expires_at_unix_seconds,
+    id_token: "id-token".to_owned(),
+    refresh_token: "refresh-token".to_owned(),
+    scopes: Vec::new(),
+    subject: "subject".to_owned(),
+  };
+
+  return record;
 }
 
 fn parameter<'a>(
