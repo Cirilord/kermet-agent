@@ -5,13 +5,15 @@ use super::super::{CliAction, CliError};
 #[derive(Args)]
 pub(in super::super) struct ModelsArgs {
   #[command(subcommand)]
-  command: Option<ModelsCommand>,
+  command: ModelsCommand,
 }
 
 #[derive(Subcommand)]
 enum ModelsCommand {
   /// Set the default model profile.
   Default(DefaultModelArgs),
+  /// List the models available to the active provider.
+  Show,
 }
 
 #[derive(Args)]
@@ -31,10 +33,10 @@ impl DefaultModelInput {
 
 pub(in super::super) fn models(args: ModelsArgs) -> Result<CliAction, CliError> {
   let action = match args.command {
-    Some(ModelsCommand::Default(args)) => {
+    ModelsCommand::Default(args) => {
       CliAction::SetDefaultModel(DefaultModelInput { slug: args.slug })
     }
-    None => CliAction::ListModels,
+    ModelsCommand::Show => CliAction::ListModels,
   };
 
   return Ok(action);

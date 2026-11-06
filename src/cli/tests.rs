@@ -72,8 +72,9 @@ fn parses_the_logout_command() -> () {
 }
 
 #[test]
-fn parses_the_models_command() -> () {
-  let cli = Cli::try_parse_from(["kermet", "models"]).expect("the models command should parse");
+fn parses_the_models_show_command() -> () {
+  let cli = Cli::try_parse_from(["kermet", "models", "show"])
+    .expect("the models show command should parse");
 
   assert!(matches!(cli.command, Command::Models(_)));
 
