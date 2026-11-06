@@ -8,8 +8,12 @@ pub(crate) struct ProviderAccount {
 }
 
 pub(crate) struct ProviderModel {
+  context_window: u64,
+  default_reasoning_level: String,
   display_name: String,
+  max_context_window: u64,
   slug: String,
+  supported_reasoning_levels: Vec<String>,
 }
 
 pub(crate) enum ProviderLogout {
@@ -40,18 +44,48 @@ impl ProviderAccount {
 }
 
 impl ProviderModel {
-  pub(super) fn new(slug: String, display_name: String) -> ProviderModel {
-    let model = ProviderModel { display_name, slug };
+  pub(super) fn new(
+    slug: String,
+    display_name: String,
+    supported_reasoning_levels: Vec<String>,
+    default_reasoning_level: String,
+    context_window: u64,
+    max_context_window: u64,
+  ) -> ProviderModel {
+    let model = ProviderModel {
+      context_window,
+      default_reasoning_level,
+      display_name,
+      max_context_window,
+      slug,
+      supported_reasoning_levels,
+    };
 
     return model;
+  }
+
+  pub(crate) fn context_window(&self) -> u64 {
+    return self.context_window;
+  }
+
+  pub(crate) fn default_reasoning_level(&self) -> &str {
+    return &self.default_reasoning_level;
   }
 
   pub(crate) fn display_name(&self) -> &str {
     return &self.display_name;
   }
 
+  pub(crate) fn max_context_window(&self) -> u64 {
+    return self.max_context_window;
+  }
+
   pub(crate) fn slug(&self) -> &str {
     return &self.slug;
+  }
+
+  pub(crate) fn supported_reasoning_levels(&self) -> &[String] {
+    return &self.supported_reasoning_levels;
   }
 }
 

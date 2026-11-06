@@ -149,7 +149,17 @@ fn list_models() -> std::process::ExitCode {
   };
 
   for model in models {
-    println!("{}\t{}", model.slug(), model.display_name());
+    let reasoning_levels = model.supported_reasoning_levels().join(",");
+
+    println!(
+      "{}\t{}\t{}\t{}\t{}\t{}",
+      model.slug(),
+      model.display_name(),
+      reasoning_levels,
+      model.default_reasoning_level(),
+      model.context_window(),
+      model.max_context_window(),
+    );
   }
 
   return std::process::ExitCode::SUCCESS;

@@ -50,8 +50,14 @@ impl CodexProvider {
     let mut provider_models = Vec::new();
 
     for model in codex_models {
-      let provider_model =
-        ProviderModel::new(model.slug().to_owned(), model.display_name().to_owned());
+      let provider_model = ProviderModel::new(
+        model.slug().to_owned(),
+        model.display_name().to_owned(),
+        model.supported_reasoning_levels().to_vec(),
+        model.default_reasoning_level().to_owned(),
+        model.context_window(),
+        model.max_context_window(),
+      );
 
       provider_models.push(provider_model);
     }
