@@ -24,13 +24,43 @@ fn main() -> std::process::ExitCode {
   }
 
   let exit_code = match action {
+    cli::CliAction::GetConfig(input) => get_config(input),
+    cli::CliAction::SetConfig(input) => set_config(input),
     cli::CliAction::ShowConfig => show_config(),
+    cli::CliAction::UnsetConfig(input) => unset_config(input),
     cli::CliAction::Login(args) => login(args),
     cli::CliAction::ListModels => list_models(),
     cli::CliAction::Logout => logout(),
   };
 
   return exit_code;
+}
+
+fn get_config(input: cli::ConfigKeyInput) -> std::process::ExitCode {
+  let value = match config::get(input.key()) {
+    Ok(value) => value,
+    Err(error) => {
+      eprintln!("error: {error}");
+
+      return std::process::ExitCode::from(CONFIGURATION_EXIT_CODE);
+    }
+  };
+
+  println!("{value}");
+
+  return std::process::ExitCode::SUCCESS;
+}
+
+fn set_config(input: cli::ConfigSetInput) -> std::process::ExitCode {
+  let result = config::set(input.key(), input.value());
+
+  if let Err(error) = result {
+    eprintln!("error: {error}");
+
+    return std::process::ExitCode::from(CONFIGURATION_EXIT_CODE);
+  }
+
+  return std::process::ExitCode::SUCCESS;
 }
 
 fn show_config() -> std::process::ExitCode {
@@ -44,6 +74,18 @@ fn show_config() -> std::process::ExitCode {
   };
 
   print!("{contents}");
+
+  return std::process::ExitCode::SUCCESS;
+}
+
+fn unset_config(input: cli::ConfigKeyInput) -> std::process::ExitCode {
+  let result = config::unset(input.key());
+
+  if let Err(error) = result {
+    eprintln!("error: {error}");
+
+    return std::process::ExitCode::from(CONFIGURATION_EXIT_CODE);
+  }
 
   return std::process::ExitCode::SUCCESS;
 }

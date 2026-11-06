@@ -88,7 +88,7 @@ pub(super) fn read_at(path: &Path) -> Result<String, ConfigError> {
   return Ok(contents);
 }
 
-fn user_path() -> Result<PathBuf, ConfigError> {
+pub(super) fn user_path() -> Result<PathBuf, ConfigError> {
   let home = match std::env::var_os("HOME") {
     Some(home) => PathBuf::from(home),
     None => return Err(ConfigError::HomeUnavailable),

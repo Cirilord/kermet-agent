@@ -30,7 +30,10 @@ fn trims_the_login_provider() -> () {
     Err(_) => panic!("the login action should be valid"),
   };
   let args = match action {
+    CliAction::GetConfig(_) => panic!("the action should be login"),
+    CliAction::SetConfig(_) => panic!("the action should be login"),
     CliAction::ShowConfig => panic!("the action should be login"),
+    CliAction::UnsetConfig(_) => panic!("the action should be login"),
     CliAction::Login(args) => args,
     CliAction::ListModels => panic!("the action should be login"),
     CliAction::Logout => panic!("the action should be login"),
@@ -80,6 +83,36 @@ fn parses_the_models_command() -> () {
 fn parses_the_config_show_command() -> () {
   let cli = Cli::try_parse_from(["kermet", "config", "show"])
     .expect("the config show command should parse");
+
+  assert!(matches!(cli.command, Command::Config(_)));
+
+  return;
+}
+
+#[test]
+fn parses_the_config_get_command() -> () {
+  let cli = Cli::try_parse_from(["kermet", "config", "get", "model"])
+    .expect("the config get command should parse");
+
+  assert!(matches!(cli.command, Command::Config(_)));
+
+  return;
+}
+
+#[test]
+fn parses_the_config_set_command() -> () {
+  let cli = Cli::try_parse_from(["kermet", "config", "set", "model", "gpt-6.1-sol"])
+    .expect("the config set command should parse");
+
+  assert!(matches!(cli.command, Command::Config(_)));
+
+  return;
+}
+
+#[test]
+fn parses_the_config_unset_command() -> () {
+  let cli = Cli::try_parse_from(["kermet", "config", "unset", "model"])
+    .expect("the config unset command should parse");
 
   assert!(matches!(cli.command, Command::Config(_)));
 

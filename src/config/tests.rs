@@ -2,7 +2,170 @@ use std::{fs, path::PathBuf};
 
 use uuid::Uuid;
 
-use super::path::{ensure_exists_at, exists_at, read_at};
+use super::{
+  document::{get_at, set_at, unset_at},
+  path::{ensure_exists_at, exists_at, read_at},
+};
+
+#[test]
+fn gets_a_string_configuration_value() -> () {
+  let path = temporary_path();
+
+  fs::write(&path, "model = \"gpt-6.1-sol\"\n").expect("the configuration file should be created");
+  let value = match get_at(&path, "model") {
+    Ok(value) => value,
+    Err(_) => panic!("the configuration value should be read"),
+  };
+
+  fs::remove_file(&path).expect("the configuration file should be removed");
+  fs::remove_dir(
+    path
+      .parent()
+      .expect("the configuration path should have a parent"),
+  )
+  .expect("the configuration directory should be removed");
+
+  assert_eq!(value, "gpt-6.1-sol");
+
+  return;
+}
+
+#[test]
+fn gets_a_string_value_from_a_configuration_table() -> () {
+  let path = temporary_path();
+
+  fs::write(&path, "[profiles.default]\nmodel = \"gpt-6.1-sol\"\n")
+    .expect("the configuration file should be created");
+  let value = match get_at(&path, "profiles.default.model") {
+    Ok(value) => value,
+    Err(_) => panic!("the configuration value should be read"),
+  };
+
+  fs::remove_file(&path).expect("the configuration file should be removed");
+  fs::remove_dir(
+    path
+      .parent()
+      .expect("the configuration path should have a parent"),
+  )
+  .expect("the configuration directory should be removed");
+
+  assert_eq!(value, "gpt-6.1-sol");
+
+  return;
+}
+
+#[test]
+fn sets_a_string_configuration_value() -> () {
+  let path = temporary_path();
+
+  fs::write(&path, "# Kermet configuration\n").expect("the configuration file should be created");
+  let result = set_at(&path, "model", "gpt-6.1-sol");
+  let contents = fs::read_to_string(&path).expect("the configuration file should be readable");
+
+  fs::remove_file(&path).expect("the configuration file should be removed");
+  fs::remove_dir(
+    path
+      .parent()
+      .expect("the configuration path should have a parent"),
+  )
+  .expect("the configuration directory should be removed");
+
+  assert!(result.is_ok());
+  assert!(contents.contains("# Kermet configuration"));
+  assert!(contents.contains("model = \"gpt-6.1-sol\""));
+
+  return;
+}
+
+#[test]
+fn creates_tables_when_setting_a_nested_configuration_value() -> () {
+  let path = temporary_path();
+
+  fs::write(&path, "").expect("the configuration file should be created");
+  let result = set_at(&path, "profiles.default.model", "gpt-6.1-sol");
+  let contents = fs::read_to_string(&path).expect("the configuration file should be readable");
+
+  fs::remove_file(&path).expect("the configuration file should be removed");
+  fs::remove_dir(
+    path
+      .parent()
+      .expect("the configuration path should have a parent"),
+  )
+  .expect("the configuration directory should be removed");
+
+  assert!(result.is_ok());
+  assert_eq!(contents, "[profiles.default]\nmodel = \"gpt-6.1-sol\"\n");
+
+  return;
+}
+
+#[test]
+fn unsets_a_configuration_value() -> () {
+  let path = temporary_path();
+
+  fs::write(&path, "model = \"gpt-6.1-sol\"\n").expect("the configuration file should be created");
+  let result = unset_at(&path, "model");
+  let contents = fs::read_to_string(&path).expect("the configuration file should be readable");
+
+  fs::remove_file(&path).expect("the configuration file should be removed");
+  fs::remove_dir(
+    path
+      .parent()
+      .expect("the configuration path should have a parent"),
+  )
+  .expect("the configuration directory should be removed");
+
+  assert!(result.is_ok());
+  assert!(contents.is_empty());
+
+  return;
+}
+
+#[test]
+fn unsets_a_nested_configuration_value() -> () {
+  let path = temporary_path();
+
+  fs::write(
+    &path,
+    "[profiles.default]\nmodel = \"gpt-6.1-sol\"\nprovider = \"codex\"\n",
+  )
+  .expect("the configuration file should be created");
+  let result = unset_at(&path, "profiles.default.model");
+  let contents = fs::read_to_string(&path).expect("the configuration file should be readable");
+
+  fs::remove_file(&path).expect("the configuration file should be removed");
+  fs::remove_dir(
+    path
+      .parent()
+      .expect("the configuration path should have a parent"),
+  )
+  .expect("the configuration directory should be removed");
+
+  assert!(result.is_ok());
+  assert_eq!(contents, "[profiles.default]\nprovider = \"codex\"\n");
+
+  return;
+}
+
+#[test]
+fn rejects_a_missing_configuration_value() -> () {
+  let path = temporary_path();
+
+  fs::write(&path, "").expect("the configuration file should be created");
+  let result = get_at(&path, "model");
+
+  fs::remove_file(&path).expect("the configuration file should be removed");
+  fs::remove_dir(
+    path
+      .parent()
+      .expect("the configuration path should have a parent"),
+  )
+  .expect("the configuration directory should be removed");
+
+  assert!(matches!(result, Err(super::ConfigError::KeyNotFound)));
+
+  return;
+}
 
 #[test]
 fn creates_the_configuration_file_when_it_is_missing() -> () {
