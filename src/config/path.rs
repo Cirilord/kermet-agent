@@ -1,9 +1,18 @@
-use std::path::{Path, PathBuf};
+use std::{
+  io::Write,
+  path::{Path, PathBuf},
+};
 
 use super::ConfigError;
 
 const CONFIGURATION_DIRECTORY: &str = ".kermet";
 const CONFIGURATION_FILE: &str = "config.toml";
+const INITIAL_CONFIGURATION: &str =
+  "# Kermet configuration. Credentials are stored in the system keyring.\n\n";
+
+pub(super) fn initial_contents() -> &'static str {
+  return INITIAL_CONFIGURATION;
+}
 
 pub(crate) fn ensure_exists() -> Result<(), ConfigError> {
   let path = match user_path() {
@@ -59,7 +68,13 @@ pub(super) fn ensure_exists_at(path: &Path) -> Result<(), ConfigError> {
     .create_new(true)
     .open(path)
   {
-    Ok(_) => return Ok(()),
+    Ok(mut file) => {
+      if file.write_all(initial_contents().as_bytes()).is_err() {
+        return Err(ConfigError::InitializationFailed);
+      }
+
+      return Ok(());
+    }
     Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
       let exists = match exists_at(path) {
         Ok(exists) => exists,

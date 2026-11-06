@@ -58,7 +58,11 @@ fn gets_a_string_value_from_a_configuration_table() -> () {
 fn sets_a_string_configuration_value() -> () {
   let path = temporary_path();
 
-  fs::write(&path, "# Kermet configuration\n").expect("the configuration file should be created");
+  fs::write(
+    &path,
+    "# Kermet configuration. Credentials are stored in the system keyring.\n\n",
+  )
+  .expect("the configuration file should be created");
   let result = set_at(&path, "model", "gpt-6.1-sol");
   let contents = fs::read_to_string(&path).expect("the configuration file should be readable");
 
@@ -71,8 +75,10 @@ fn sets_a_string_configuration_value() -> () {
   .expect("the configuration directory should be removed");
 
   assert!(result.is_ok());
-  assert!(contents.contains("# Kermet configuration"));
-  assert!(contents.contains("model = \"gpt-6.1-sol\""));
+  assert_eq!(
+    contents,
+    "# Kermet configuration. Credentials are stored in the system keyring.\n\nmodel = \"gpt-6.1-sol\"\n"
+  );
 
   return;
 }
@@ -94,7 +100,10 @@ fn creates_tables_when_setting_a_nested_configuration_value() -> () {
   .expect("the configuration directory should be removed");
 
   assert!(result.is_ok());
-  assert_eq!(contents, "[profiles.default]\nmodel = \"gpt-6.1-sol\"\n");
+  assert_eq!(
+    contents,
+    "# Kermet configuration. Credentials are stored in the system keyring.\n\n[profiles.default]\nmodel = \"gpt-6.1-sol\"\n"
+  );
 
   return;
 }
@@ -116,7 +125,10 @@ fn unsets_a_configuration_value() -> () {
   .expect("the configuration directory should be removed");
 
   assert!(result.is_ok());
-  assert!(contents.is_empty());
+  assert_eq!(
+    contents,
+    "# Kermet configuration. Credentials are stored in the system keyring.\n\n"
+  );
 
   return;
 }
@@ -142,7 +154,10 @@ fn unsets_a_nested_configuration_value() -> () {
   .expect("the configuration directory should be removed");
 
   assert!(result.is_ok());
-  assert_eq!(contents, "[profiles.default]\nprovider = \"codex\"\n");
+  assert_eq!(
+    contents,
+    "# Kermet configuration. Credentials are stored in the system keyring.\n\n[profiles.default]\nprovider = \"codex\"\n"
+  );
 
   return;
 }
@@ -190,7 +205,10 @@ fn creates_the_configuration_file_when_it_is_missing() -> () {
   .expect("the configuration directory should be removed");
 
   assert!(result.is_ok());
-  assert!(contents.is_empty());
+  assert_eq!(
+    contents,
+    "# Kermet configuration. Credentials are stored in the system keyring.\n\n"
+  );
 
   return;
 }

@@ -234,7 +234,11 @@ fn unset_item(table: &mut Table, segments: &[&str]) -> Result<(), ConfigError> {
 }
 
 fn write_at(path: &Path, document: DocumentMut) -> Result<(), ConfigError> {
-  if std::fs::write(path, document.to_string()).is_err() {
+  let header = path::initial_contents();
+  let contents = document.to_string().replace(header, "");
+  let contents = format!("{header}{contents}");
+
+  if std::fs::write(path, contents).is_err() {
     return Err(ConfigError::WriteFailed);
   }
 
